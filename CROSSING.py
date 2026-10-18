@@ -562,7 +562,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                     st.image(img, caption=f"Receipt - {rec_data[0]}", use_container_width=True)
                     buf = io.BytesIO()
                     img.save(buf, format="PNG")
-                    st.download_button(label="🖨️ Download Receipt Image", data=buf.getvalue(), file_name=f"Receipt_{rec_data[0]}.png", mime="image/png")
+                    st.download_button(label="🖨️ Download Receipt Image", data=buf.getvalue(), file_name=f"Receipt_{cons_no}.png", mime="image/png")
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
@@ -775,7 +775,7 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                     except: pass
                 with col_py2:
                     hist_pdf = generate_payment_pdf_receipt(r[0], r[1], r[2], r[3], r[4], r[5], r[6])
-                    st.download_button("🖨️ Receipt PDF", data=hist_pdf, file_name=f5 := f"Payment_Receipt_{r[0]}.pdf", mime="application/pdf", key=f"pdf_pay_{r[0]}")
+                    st.download_button("🖨️ Receipt PDF", data=hist_pdf, file_name=f"Payment_Receipt_{r[0]}.pdf", mime="application/pdf", key=f"pdf_pay_{r[0]}")
                 with col_py3:
                     if st.button("🗑️ Delete Pay", key=f"del_pay_{r[0]}"):
                         conn = sqlite3.connect("courier_database.db")
