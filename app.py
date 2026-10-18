@@ -31,7 +31,8 @@ def init_db():
             weight TEXT,
             pcs TEXT,
             amount TEXT,
-            booking_type TEXT
+            booking_type TEXT,
+            bill_no TEXT
         )
     """)
 
@@ -50,10 +51,23 @@ def init_db():
         CREATE TABLE IF NOT EXISTS party_payments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             party_name TEXT,
+            bill_no TEXT,
             date TEXT,
             amount TEXT,
             pay_mode TEXT,
             note TEXT
+        )
+    """)
+
+    # મંથલી બિલ રેકોર્ડ ટેબલ
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bills (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bill_no TEXT UNIQUE,
+            party_name TEXT,
+            bill_date TEXT,
+            period TEXT,
+            total_amount TEXT
         )
     """)
 
@@ -62,7 +76,7 @@ def init_db():
 
 init_db()
 
-# ----------------- HD પ્રિન્ટેબલ ઈમેજ ફંક્શન -----------------
+# ----------------- HD પ્રિન્ટેબલ ઈમેજ ફંક્શન (રસીદ માટે) -----------------
 def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type):
     width, height = 1200, 620
     img = Image.new("RGB", (width, height), "white")
@@ -89,7 +103,7 @@ def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_n
     draw.text((450, 125), f"Origin: {origin}", fill="black", font=font_regular)
     draw.text((850, 125), f"Destination: {dest}", fill="black", font=font_regular)
 
-    # Sender (મોકલનાર)
+    # Sender
     draw.rectangle([20, 160, width//2 - 10, 390], outline="#002147", width=2)
     draw.rectangle([20, 160, width//2 - 10, 190], fill="#002147")
     draw.text((width//4 - 70, 165), "SENDER (From)", fill="white", font=font_bold)
@@ -97,7 +111,7 @@ def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_n
     draw.text((30, 240), f"Address: {sender_address}", fill="black", font=font_regular)
     draw.text((30, 280), f"City/Pin: {sender_city}", fill="black", font=font_regular)
 
-    # Recipient (મેળવનાર)
+    # Recipient
     draw.rectangle([width//2 + 10, 160, width-20, 390], outline="#002147", width=2)
     draw.rectangle([width//2 + 10, 160, width-20, 190], fill="#002147")
     draw.text((3*width//4 - 70, 165), "RECIPIENT (To)", fill="white", font=font_bold)
@@ -105,7 +119,7 @@ def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_n
     draw.text((width//2 + 20, 240), f"Address: {rec_address}", fill="black", font=font_regular)
     draw.text((width//2 + 20, 280), f"City/Pin: {rec_city}", fill="black", font=font_regular)
 
-    # Weight, Quantity, Amount, Type
+    # Details
     draw.rectangle([20, 400, width-20, 500], outline="#002147", width=2)
     draw.rectangle([20, 400, width-20, 430], fill="#e6ecf2")
     draw.text((120, 405), "Weight (Kg)", fill="black", font=font_bold)
@@ -139,8 +153,8 @@ menu = st.sidebar.radio("મેનુ પસંદ કરો (Menu)", [
     "➕ Add Account Party (પાર્ટી ઉમેરો)",
     "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)",
     "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)",
-    "📊 Party Monthly Billing (માસિક બિલ બનાવટ)",
-    "💳 Party Payment Receive (પેમેન્ટ જમા)"
+    "📊 Party Monthly Billing (ડિજિટલ બિલ)",
+    "💳 Party Payment Receive (પેમેન્ટ જમા વિથ બિલ નં)"
 ])
 
 st.sidebar.markdown("---")
@@ -417,27 +431,36 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
-# ----------------- ૪. MONTHLY BILLING -----------------
-elif menu == "📊 Party Monthly Billing (માસિક બિલ બનાવટ)":
-    st.subheader("📊 Party Monthly Bill & Statement Generator")
+# ----------------- ૪. DIGITAL MONTHLY BILLING -----------------
+elif menu == "📊 Party Monthly Billing (ડિજિટલ બિલ)":
+    st.subheader("📊 Party Digital Invoice & Monthly Bill Generator")
     st.info(f"📅 પસંદ કરેલ બિલિંગ સમયગાળો: *{start_str}* થી *{end_str}*")
 
     conn = sqlite3.connect("courier_database.db")
     cursor = conn.cursor()
     cursor.execute("SELECT party_name FROM parties ORDER BY party_name ASC")
     p_list = [r[0] for r in cursor.fetchall()]
+    
+    # ઓટો બિલ નંબર જનરેટ
+    cursor.execute("SELECT COUNT(*) FROM bills")
+    b_count = cursor.fetchone()[0] + 1
+    generated_bill_no = f"BILL-2026-{b_count:03d}"
     conn.close()
 
     if not p_list:
         st.warning("કોઈ પાર્ટી ઉમેરેલી નથી.")
     else:
-        sel_party = st.selectbox("Select Party for Bill (બિલ બનાવવાની પાર્ટી પસંદ કરો):", p_list)
-        if st.button("Generate Monthly Bill", type="primary"):
+        col_b1, col_b2 = st.columns([2, 1])
+        with col_b1:
+            sel_party = st.selectbox("Select Party for Bill (બિલ બનાવવાની પાર્ટી પસંદ કરો):", p_list)
+        with col_b2:
+            st.text_input("Generated Bill No (ઓટો બિલ નંબર):", value=generated_bill_no, disabled=True)
+
+        if st.button("⚡ Generate Modern Digital Bill", type="primary"):
             conn = sqlite3.connect("courier_database.db")
             cursor = conn.cursor()
             cursor.execute("SELECT id, cons_no, date, dest, rec_name, weight, amount FROM receipts WHERE sender_name=? AND booking_type='Credit Account' ORDER BY id DESC", (sel_party,))
             b_rows = cursor.fetchall()
-            conn.close()
 
             filtered_bill = []
             tot_bill = 0
@@ -455,84 +478,134 @@ elif menu == "📊 Party Monthly Billing (માસિક બિલ બનાવ
                     except: pass
 
             if filtered_bill:
-                st.write(f"### 📄 Monthly Bill Statement for: *{sel_party}* ({start_str} to {end_str})")
-                st.success(f"💰 Total Monthly Payable Bill for '{sel_party}': RS {tot_bill:,.2f}/-")
-                
-                bill_text = f"--- COURIER SOLUTION BILL STATEMENT ---\n"
-                bill_text += f"Party: {sel_party}\nPeriod: {start_str} to {end_str}\n"
-                bill_text += f"----------------------------------------\n"
+                # બિલ ડેટાબેઝમાં પણ સેવ કરો
+                try:
+                    cursor.execute("INSERT INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (?, ?, ?, ?, ?)",
+                                   (generated_bill_no, sel_party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
+                    
+                    # કન્સાઇનમેન્ટ સાથે બિલ નંબર કનેક્ટ કરો
+                    for item in filtered_bill:
+                        cursor.execute("UPDATE receipts SET bill_no=? WHERE id=?", (generated_bill_no, item[0]))
+                    conn.commit()
+                except:
+                    pass
+                conn.close()
+
+                # --- મોડર્ન ડિજિટલ બિલ લુક (HTML/CSS) ---
+                st.markdown(f"""
+                <div style="border: 2px solid #002147; padding: 20px; border-radius: 10px; background-color: #ffffff;">
+                    <div style="text-align: center; border-bottom: 2px solid #002147; padding-bottom: 10px;">
+                        <h2 style="color: #002147; margin:0;">📦 COURIER SOLUTION</h2>
+                        <p style="margin:0; color: #555;">Express Cargo & Logistics Services</p>
+                        <h4 style="color: #d9534f; margin: 5px 0 0 0;">TAX INVOICE / MONTHLY BILL</h4>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 15px; font-size: 14px;">
+                        <div>
+                            <b>Invoice To:</b> <br>
+                            <span style="font-size: 16px; color: #002147;"><b>{sel_party}</b></span><br>
+                            Period: {start_str} to {end_str}
+                        </div>
+                        <div style="text-align: right;">
+                            <b>Invoice No:</b> <span style="color: red;">{generated_bill_no}</span><br>
+                            <b>Date:</b> {today.strftime("%d/%m/%Y")}<br>
+                            <b>Status:</b> <span style="color: orange; font-weight: bold;">UNPAID</span>
+                        </div>
+                    </div>
+                    <hr>
+                </div>
+                """, unsafe_allow_html=True)
+
+                table_data = []
                 for idx, r in enumerate(filtered_bill, 1):
-                    bill_text += f"{idx}. Cons: {r[1]} | Date: {r[2]} | Dest: {r[3]} | Rec: {r[4]} | Wt: {r[5]}kg | Amt: {r[6]}/-\n"
-                bill_text += f"----------------------------------------\n"
-                bill_text += f"TOTAL PAYABLE AMOUNT: RS {tot_bill:,.2f}/-\n"
-                bill_text += f"----------------------------------------\n"
+                    table_data.append({
+                        "Sr No": idx,
+                        "Consignment No": r[1],
+                        "Date": r[2],
+                        "Destination": r[3],
+                        "Recipient": r[4],
+                        "Weight (Kg)": r[5],
+                        "Amount (RS)": f"₹ {float(r[6]):,.2f}"
+                    })
+                
+                st.table(table_data)
+                st.markdown(f"""
+                <div style="text-align: right; font-size: 18px; color: #008000; padding: 10px; background-color: #e8f5e9; border-radius: 5px;">
+                    <b>TOTAL PAYABLE AMOUNT: ₹ {tot_bill:,.2f}/-</b>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # વોટ્સએપ મોકલવા માટે ડાઉનલોડ બટન
+                bill_text = f"📦 COURIER SOLUTION - INVOICE\n"
+                bill_text += f"Invoice No: {generated_bill_no}\n"
+                bill_text += f"Party Name: {sel_party}\n"
+                bill_text += f"Period: {start_str} to {end_str}\n"
+                bill_text += f"------------------------------------\n"
+                for idx, r in enumerate(filtered_bill, 1):
+                    bill_text += f"{idx}. {r[1]} | {r[2]} | {r[3]} | ₹{r[6]}/-\n"
+                bill_text += f"------------------------------------\n"
+                bill_text += f"TOTAL PAYABLE: ₹ {tot_bill:,.2f}/-\n"
+                bill_text += f"------------------------------------"
 
                 st.download_button(
-                    label="📥 Download Bill Statement (TXT/WhatsApp File)",
+                    label="📥 Download WhatsApp Digital Bill File",
                     data=bill_text,
-                    file_name=f"Bill_{sel_party}{start_str.replace('/','-')}_to{end_str.replace('/','-')}.txt",
+                    file_name=f"Invoice_{generated_bill_no}_{sel_party}.txt",
                     mime="text/plain"
                 )
-
-                st.write("---")
-                for r in filtered_bill:
-                    col_b1, col_b2 = st.columns([4, 1])
-                    with col_b1:
-                        st.write(f"🧾 *Cons: {r[1]}* | Date: {r[2]} | Dest: {r[3]} | Recipient: {r[4]} | Wt: {r[5]}kg | *Amount: RS {r[6]}/-*")
-                    with col_b2:
-                        if st.button("🗑️ Delete", key=f"del_credit_{r[0]}"):
-                            conn = sqlite3.connect("courier_database.db")
-                            cursor = conn.cursor()
-                            cursor.execute("DELETE FROM receipts WHERE id=?", (r[0],))
-                            conn.commit()
-                            conn.close()
-                            st.success(f"Consignment {r[1]} ડિલીટ થઈ ગયું છે!")
-                            st.rerun()
             else:
+                conn.close()
                 st.info(f"પાર્ટી '{sel_party}' માટે પસંદ કરેલી તારીખો વચ્ચે કોઈ ક્રેડિટ બુકિંગ મળેલ નથી.")
 
-# ----------------- ૫. PARTY PAYMENT RECEIVE -----------------
-elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા)":
-    st.subheader("💳 Party Payment Receive (પાર્ટી પેમેન્ટ જમા લો)")
+# ----------------- ૫. PARTY PAYMENT RECEIVE WITH BILL NO -----------------
+elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા વિથ બિલ નં)":
+    st.subheader("💳 Party Payment Receive (બિલ નંબરથી પેમેન્ટ જમા લો)")
     
     conn = sqlite3.connect("courier_database.db")
     cursor = conn.cursor()
     cursor.execute("SELECT party_name FROM parties ORDER BY party_name ASC")
     p_list = [r[0] for r in cursor.fetchall()]
+    
+    cursor.execute("SELECT bill_no, party_name, total_amount FROM bills ORDER BY id DESC")
+    b_list = cursor.fetchall()
     conn.close()
+
+    bill_options = ["-- Select Bill No (બિલ નં પસંદ કરો) --"] + [f"{b[0]} | {b[1]} | RS {b[2]}/-" for b in b_list]
 
     if not p_list:
         st.warning("⚠️ પહેલા મેનુમાંથી 'Add Account Party' પસંદ કરીને પાર્ટી ઉમેરો!")
     else:
         with st.form("payment_form", clear_on_submit=True):
-            pay_party = st.selectbox("Select Party Name (પાર્ટી સિલેક્ટ કરો):", p_list)
+            selected_bill_opt = st.selectbox("Select Bill No for Payment (જે બિલનું પેમેન્ટ આવ્યુ હોય તે બિલ નં પસંદ કરો):", bill_options)
+            pay_party = st.selectbox("Select Party Name (પાર્ટીનું નામ):", p_list)
             pay_date = st.text_input("Payment Date (તારીખ):", value=today.strftime("%d/%m/%Y"))
-            pay_amount = st.text_input("Payment Amount (રકમ RS):")
+            pay_amount = st.text_input("Payment Amount (જમા થયેલ રકમ RS):")
             pay_mode = st.selectbox("Payment Mode (પેમેન્ટ મોડ):", ["Cash (રોકડ)", "UPI (ગૂગલપે/ફોનપે)", "Cheque (ચેક)"])
             pay_note = st.text_input("Note / Cheque No / Reference (નોંધ):")
             
-            submit_pay = st.form_submit_button("💾 Save Payment Receive (પેમેન્ટ જમા કરો)", type="primary")
+            submit_pay = st.form_submit_button("💾 Save Payment Receive (જમા કરો)", type="primary")
 
             if submit_pay:
                 if not pay_amount.strip():
                     st.error("મહેરબાની કરીને જમા લેવાની રકમ ભરો!")
                 else:
+                    target_bill_no = selected_bill_opt.split(" | ")[0] if "-- Select" not in selected_bill_opt else "DIRECT"
+                    
                     conn = sqlite3.connect("courier_database.db")
                     cursor = conn.cursor()
                     cursor.execute("""
-                        INSERT INTO party_payments (party_name, date, amount, pay_mode, note)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (pay_party.strip(), pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip()))
+                        INSERT INTO party_payments (party_name, bill_no, date, amount, pay_mode, note)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip()))
                     conn.commit()
                     conn.close()
-                    st.success(f"પાર્ટી '{pay_party}' પાસેથી RS {pay_amount}/- સફળતાપૂર્વક જમા થઈ ગયા છે! ({pay_mode})")
+                    st.success(f"પાર્ટી '{pay_party}' માટે (બિલ નં: {target_bill_no}) RS {pay_amount}/- જમા થઈ ગયા છે! ({pay_mode})")
 
         st.markdown("---")
         st.subheader("📜 Party Payment History (જમા થયેલા પેમેન્ટની હિસ્ટ્રી)")
         
         conn = sqlite3.connect("courier_database.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT id, party_name, date, amount, pay_mode, note FROM party_payments ORDER BY id DESC")
+        cursor.execute("SELECT id, party_name, bill_no, date, amount, pay_mode, note FROM party_payments ORDER BY id DESC")
         pay_rows = cursor.fetchall()
         conn.close()
 
@@ -541,8 +614,8 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા)":
             for r in pay_rows:
                 col_py1, col_py2 = st.columns([4, 1])
                 with col_py1:
-                    st.write(f"🏢 *{r[1]}* | Date: {r[2]} | *RS {r[3]}/-* ({r[4]}) {f'| Note: {r[5]}' if r[5] else ''}")
-                    try: tot_received += float(r[3])
+                    st.write(f"🏢 *{r[1]}* | Bill No: <span style='color:red;'><b>{r[2]}</b></span> | Date: {r[3]} | *RS {r[4]}/-* ({r[5]}) {f'| Note: {r[6]}' if r[6] else ''}", unsafe_allow_html=True)
+                    try: tot_received += float(r[4])
                     except: pass
                 with col_py2:
                     if st.button("🗑️ Delete", key=f"del_pay_{r[0]}"):
