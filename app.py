@@ -1,6 +1,7 @@
 import streamlit as st
 import sqlite3
-import os
+import datetime
+import io
 from PIL import Image, ImageDraw, ImageFont
 
 # Page Configuration
@@ -48,7 +49,7 @@ def init_db():
 
 init_db()
 
-# ----------------- HD ઈમેજ જનરેટર -----------------
+# ----------------- HD પ્રિન્ટેબલ ઈમેજ ફંક્શન -----------------
 def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type):
     width, height = 1200, 620
     img = Image.new("RGB", (width, height), "white")
@@ -75,7 +76,7 @@ def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_n
     draw.text((450, 125), f"Origin: {origin}", fill="black", font=font_regular)
     draw.text((850, 125), f"Destination: {dest}", fill="black", font=font_regular)
 
-    # Sender
+    # Sender (મોકલનાર)
     draw.rectangle([20, 160, width//2 - 10, 390], outline="#002147", width=2)
     draw.rectangle([20, 160, width//2 - 10, 190], fill="#002147")
     draw.text((width//4 - 70, 165), "SENDER (From)", fill="white", font=font_bold)
@@ -83,7 +84,7 @@ def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_n
     draw.text((30, 240), f"Address: {sender_address}", fill="black", font=font_regular)
     draw.text((30, 280), f"City/Pin: {sender_city}", fill="black", font=font_regular)
 
-    # Recipient
+    # Recipient (મેળવનાર)
     draw.rectangle([width//2 + 10, 160, width-20, 390], outline="#002147", width=2)
     draw.rectangle([width//2 + 10, 160, width-20, 190], fill="#002147")
     draw.text((3*width//4 - 70, 165), "RECIPIENT (To)", fill="white", font=font_bold)
@@ -91,7 +92,7 @@ def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_n
     draw.text((width//2 + 20, 240), f"Address: {rec_address}", fill="black", font=font_regular)
     draw.text((width//2 + 20, 280), f"City/Pin: {rec_city}", fill="black", font=font_regular)
 
-    # Weight, Pcs, Amount
+    # Weight, Quantity, Amount, Type
     draw.rectangle([20, 400, width-20, 500], outline="#002147", width=2)
     draw.rectangle([20, 400, width-20, 430], fill="#e6ecf2")
     draw.text((120, 405), "Weight (Kg)", fill="black", font=font_bold)
@@ -114,179 +115,261 @@ def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_n
 
     return img
 
-# ----------------- મેઈન એપ્લિકેશન યુઝર ઇન્ટરફેસ (Sidebar Navigation) -----------------
-st.title("📦 Courier Solution Management")
+# ----------------- DASHBOARD UI -----------------
+st.title("📦 COURIER SOLUTION")
+st.caption("Express Cargo & Logistics Management System")
 st.markdown("---")
 
-menu = st.sidebar.selectbox("મેનુ પસંદ કરો (Menu)", ["Cash Booking (રોકડ કુરિયર)", "Credit Account Booking (ક્રેડિટ બુકિંગ)", "Add Account Party (પાર્ટી ઉમેરો)", "Monthly Billing & History (માસિક બિલિંગ)"])
+# SIDEBAR NAVIGATION & FILTER
+st.sidebar.header("⚙️ નેવિગેશન & ફિલ્ટર")
+menu = st.sidebar.radio("મેનુ પસંદ કરો (Menu)", [
+    "➕ Add Account Party (પાર્ટી ઉમેરો)",
+    "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)",
+    "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)",
+    "📊 Party Monthly Billing (માસિક બિલ બનાવટ)"
+])
 
-# 1. CASH BOOKING
-if menu == "Cash Booking (રોકડ કુરિયર)":
-    st.subheader("💵 Cash Courier Booking")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        cons_no = st.text_input("Consignment No:")
-        date = st.text_input("Date", value="17/10/2026")
-        courier_co = st.text_input("Courier Company", value="DTDC")
-        mode = st.text_input("Service Mode", value="Surface")
-        origin = st.text_input("Origin", value="B.N.R.")
-        dest = st.text_input("Destination")
-    with col2:
-        sender_name = st.text_input("Sender Name")
-        sender_address = st.text_input("Sender Address")
-        sender_city = st.text_input("Sender City/Pin")
-        rec_name = st.text_input("Recipient Name")
-        rec_address = st.text_input("Recipient Address")
-        rec_city = st.text_input("Recipient City/Pin")
+st.sidebar.markdown("---")
+st.sidebar.subheader("📅 તારીખ ફિલ્ટર (Date Filter)")
+today = datetime.date.today()
+first_day_curr_month = today.replace(day=1)
 
-    col3, col4, col5 = st.columns(3)
-    with col3: weight = st.text_input("Weight (Kg)", value="1.0")
-    with col4: pcs = st.text_input("Pieces (Pcs)", value="1")
-    with col5: amount = st.text_input("Total Amount (RS)")
+start_date = st.sidebar.date_input("શરૂઆતની તારીખ (From Date):", value=first_day_curr_month)
+end_date = st.sidebar.date_input("છેલ્લી તારીખ (To Date):", value=today)
 
-    if st.button("💾 Save & Generate Receipt", type="primary"):
-        if not cons_no or not sender_name or not rec_name or not amount:
-            st.error("ਕૃਪਾ ਕਰਕੇ Consignment No, Sender Name, Recipient Name અને Amount ભરો!")
-        else:
-            conn = sqlite3.connect("courier_database.db")
-            cursor = conn.cursor()
-            try:
-                cursor.execute("""
-                    INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Cash'))
-                conn.commit()
-                st.success("Cash Booking Successfully Saved!")
-                
-                # Show Receipt Image
-                img = generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Cash')
-                st.image(img, caption=f"Receipt: {cons_no}", use_container_width=True)
-            except sqlite3.IntegrityError:
-                st.error("આ Consignment Number પહેલેથી જ અજિસ્ટ છે!")
-            conn.close()
+start_str = start_date.strftime("%d/%m/%Y")
+end_str = end_date.strftime("%d/%m/%Y")
 
-# 2. CREDIT ACCOUNT BOOKING
-elif menu == "Credit Account Booking (ક્રેડિટ બુકિંગ)":
-    st.subheader("📋 Credit Account Courier Booking")
-    
+# ----------------- ૧. ADD PARTY MASTER -----------------
+if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
+    st.subheader("➕ Add Monthly Account Party Master")
+    with st.form("party_form", clear_on_submit=True):
+        p_name = st.text_input("Party Name (પાર્ટીનું નામ):")
+        p_addr = st.text_input("Address (સરનામું):")
+        p_city = st.text_input("City / Pin Code (શહેર / પીનકોડ):")
+        submit_p = st.form_submit_button("Save Party", type="primary")
+
+        if submit_p:
+            if not p_name.strip():
+                st.error("મહેરબાની કરીને Party Name ભરો!")
+            else:
+                conn = sqlite3.connect("courier_database.db")
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("INSERT INTO parties (party_name, party_address, party_city) VALUES (?, ?, ?)", (p_name.strip(), p_addr.strip(), p_city.strip()))
+                    conn.commit()
+                    st.success(f"પાર્ટી '{p_name}' સફળતાપૂર્વક ઉમેરાઈ ગઈ છે!")
+                except sqlite3.IntegrityError:
+                    st.error("આ નામની પાર્ટી પહેલેથી જ અસ્તિત્વમાં છે!")
+                conn.close()
+
+    st.markdown("---")
+    st.write("### 🏢 હાલમાં સેવ થયેલી પાર્ટીઓની યાદી:")
     conn = sqlite3.connect("courier_database.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT party_name FROM parties ORDER BY party_name ASC")
-    parties = [row[0] for row in cursor.fetchall()]
+    cursor.execute("SELECT id, party_name, party_address, party_city FROM parties ORDER BY party_name ASC")
+    p_rows = cursor.fetchall()
     conn.close()
+    if p_rows:
+        p_list = [{"ID": r[0], "Party Name": r[1], "Address": r[2], "City": r[3]} for r in p_rows]
+        st.dataframe(p_list, use_container_width=True)
 
-    if not parties:
-        st.warning("પહેલા સાઇડબારમાંથી અથવા 'Add Account Party' મેનુમાંથી પાર્ટી ઉમેરો!")
-    
-    selected_party = st.selectbox("Select Party Name:", parties if parties else ["No Party"])
-    
-    # Fetch party details
-    p_addr, p_city = "", ""
-    if parties:
+# ----------------- ૨. CASH BOOKING -----------------
+elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)":
+    tab1, tab2 = st.tabs(["💵 Cash Booking (નવી એન્ટ્રી)", "📜 Cash History & Collection (હિસ્ટ્રી)"])
+
+    with tab1:
+        st.subheader("Cash Courier Booking")
+        col1, col2 = st.columns(2)
+        with col1:
+            cons_no = st.text_input("Consignment No:", key="c_cons")
+            date_entry = st.text_input("Date:", value=today.strftime("%d/%m/%Y"), key="c_date")
+            courier_co = st.text_input("Courier Company:", "DTDC", key="c_co")
+            mode = st.text_input("Service Mode:", "Surface", key="c_mode")
+            origin = st.text_input("Origin:", "B.N.R.", key="c_orig")
+            dest = st.text_input("Destination:", key="c_dest")
+        with col2:
+            sender_name = st.text_input("Sender Name:", key="c_s_name")
+            sender_address = st.text_input("Sender Address:", key="c_s_addr")
+            sender_city = st.text_input("Sender City/Pin:", key="c_s_city")
+            rec_name = st.text_input("Recipient Name:", key="c_r_name")
+            rec_address = st.text_input("Recipient Address:", key="c_r_addr")
+            rec_city = st.text_input("Recipient City/Pin:", key="c_r_city")
+
+        col3, col4, col5 = st.columns(3)
+        with col3: weight = st.text_input("Weight (Kg):", "1.0", key="c_wt")
+        with col4: pcs = st.text_input("Pieces (Pcs):", "1", key="c_pcs")
+        with col5: amount = st.text_input("Total Amount (RS):", key="c_amt")
+
+        if st.button("💾 Save & Generate Cash Receipt", type="primary"):
+            if not cons_no or not sender_name or not rec_name or not amount:
+                st.error("મહેરબાની કરીને Consignment No, Sender Name, Recipient Name અને Amount ભરો!")
+            else:
+                conn = sqlite3.connect("courier_database.db")
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("""
+                        INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), sender_name.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Cash'))
+                    conn.commit()
+                    st.success(f"Cash Entry Saved Successfully for Consignment: {cons_no}")
+                    
+                    img = generate_exact_image(cons_no, date_entry, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Cash')
+                    st.image(img, caption=f"Receipt - {cons_no}", use_container_width=True)
+                    
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    st.download_button(label="🖨️ Download Receipt Image (For Print/WhatsApp)", data=buf.getvalue(), file_name=f"Receipt_{cons_no}.png", mime="image/png")
+                except sqlite3.IntegrityError:
+                    st.error("આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે!")
+                conn.close()
+
+    with tab2:
+        st.subheader("📜 Cash Booking Records & Collection History")
+        st.info(f"📅 ફિલ્ટર કરેલી તારીખ ગાળો: *{start_str}* થી *{end_str}*")
+
         conn = sqlite3.connect("courier_database.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT party_address, party_city FROM parties WHERE party_name=?", (selected_party,))
-        res = cursor.fetchone()
+        cursor.execute("SELECT id, cons_no, date, sender_name, rec_name, amount FROM receipts WHERE booking_type='Cash' ORDER BY id DESC")
+        cash_rows = cursor.fetchall()
         conn.close()
-        if res: p_addr, p_city = res[0], res[1]
 
-    col1, col2 = st.columns(2)
-    with col1:
-        cons_no = st.text_input("Consignment No:")
-        date = st.text_input("Date", value="17/10/2026")
-        courier_co = st.text_input("Courier Company", value="DTDC")
-        mode = st.text_input("Service Mode", value="Surface")
-        origin = st.text_input("Origin", value="B.N.R.")
-        dest = st.text_input("Destination")
-    with col2:
-        sender_address = st.text_input("Sender Address", value=p_addr)
-        sender_city = st.text_input("Sender City/Pin", value=p_city)
-        rec_name = st.text_input("Recipient Name")
-        rec_address = st.text_input("Recipient Address")
-        rec_city = st.text_input("Recipient City/Pin")
+        filtered_cash = []
+        tot_cash = 0
 
-    col3, col4, col5 = st.columns(3)
-    with col3: weight = st.text_input("Weight (Kg)", value="1.0")
-    with col4: pcs = st.text_input("Pieces (Pcs)", value="1")
-    with col5: amount = st.text_input("Amount (RS)")
-
-    if st.button("💾 Save Credit Entry", type="primary"):
-        if not cons_no or not selected_party or not rec_name or not amount:
-            st.error("ਕૃਪਾ ਕਰਕੇ જરૂરી માહિતી ભરો!")
-        else:
-            conn = sqlite3.connect("courier_database.db")
-            cursor = conn.cursor()
+        for r in cash_rows:
+            rec_date_str = r[2]
             try:
-                cursor.execute("""
-                    INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (cons_no, date, courier_co, mode, origin, dest, selected_party, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Credit Account'))
-                conn.commit()
-                st.success(f"Credit Entry Saved for Party: {selected_party}")
-            except sqlite3.IntegrityError:
-                st.error("આ Consignment Number પહેલેથી અજિસ્ટ છે!")
-            conn.close()
+                rec_dt = datetime.datetime.strptime(rec_date_str, "%d/%m/%Y").date()
+                if start_date <= rec_dt <= end_date:
+                    filtered_cash.append({"ID": r[0], "Consignment": r[1], "Date": r[2], "Sender": r[3], "Recipient": r[4], "Amount (RS)": r[5]})
+                    tot_cash += float(r[5])
+            except:
+                # જો તારીખ ફોર્મેટ મેચ ન થાય તો બાય ડિફોલ્ટ બતાવવું
+                filtered_cash.append({"ID": r[0], "Consignment": r[1], "Date": r[2], "Sender": r[3], "Recipient": r[4], "Amount (RS)": r[5]})
+                try: tot_cash += float(r[5])
+                except: pass
 
-# 3. ADD ACCOUNT PARTY
-elif menu == "Add Account Party (પાર્ટી ઉમેરો)":
-    st.subheader("➕ Add Monthly Credit Party Master")
-    
-    p_name = st.text_input("Party Name:")
-    p_addr = st.text_input("Party Address:")
-    p_city = st.text_input("Party City / Pin:")
-
-    if st.button("Save Party", type="primary"):
-        if not p_name:
-            st.error("ਕૃਪਾ ਕਰਕੇ પાર્ટીનું નામ લખો!")
+        if filtered_cash:
+            st.dataframe(filtered_cash, use_container_width=True)
+            st.metric("💰 Selected Period Cash Collection", f"RS {tot_cash:,.2f}/-")
         else:
-            conn = sqlite3.connect("courier_database.db")
-            cursor = conn.cursor()
-            try:
-                cursor.execute("INSERT INTO parties (party_name, party_address, party_city) VALUES (?, ?, ?)", (p_name, p_addr, p_city))
-                conn.commit()
-                st.success(f"Party '{p_name}' successfully added!")
-            except sqlite3.IntegrityError:
-                st.error("આ નામની પાર્ટી પહેલેથી જ અજિસ્ટ છે!")
-            conn.close()
+            st.warning("આ પસંદ કરેલી તારીખ ગાળામાં કોઈ કેશ બુકિંગ એન્ટ્રી મળી નથી.")
 
-# 4. MONTHLY BILLING & HISTORY
-elif menu == "Monthly Billing & History (માસિક બિલિંગ)":
-    st.subheader("📊 Party Monthly Bill Generator")
+# ----------------- ૩. CREDIT ACCOUNT BOOKING -----------------
+elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)":
+    st.subheader("Credit Account Courier Booking")
     
     conn = sqlite3.connect("courier_database.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT party_name FROM parties ORDER BY party_name ASC")
-    parties = [row[0] for row in cursor.fetchall()]
+    cursor.execute("SELECT party_name, party_address, party_city FROM parties ORDER BY party_name ASC")
+    parties_data = cursor.fetchall()
     conn.close()
 
-    if parties:
-        sel_party = st.selectbox("Select Party for Bill:", parties)
-        if st.button("Generate Bill"):
+    party_names = [r[0] for r in parties_data]
+
+    if not party_names:
+        st.warning("⚠️ પહેલા મેનુમાંથી 'Add Account Party' પસંદ કરીને પાર્ટી ઉમેરો!")
+    else:
+        selected_party = st.selectbox("Select Party Name (પાર્ટી સિલેક્ટ કરો):", party_names)
+        
+        def_addr, def_city = "", ""
+        for p in parties_data:
+            if p[0] == selected_party:
+                def_addr, def_city = p[1], p[2]
+                break
+
+        col1, col2 = st.columns(2)
+        with col1:
+            cons_no = st.text_input("Consignment No:", key="cr_cons")
+            date_entry = st.text_input("Date:", value=today.strftime("%d/%m/%Y"), key="cr_date")
+            courier_co = st.text_input("Courier Company:", "DTDC", key="cr_co")
+            mode = st.text_input("Service Mode:", "Surface", key="cr_mode")
+            origin = st.text_input("Origin:", "B.N.R.", key="cr_orig")
+            dest = st.text_input("Destination:", key="cr_dest")
+        with col2:
+            sender_address = st.text_input("Sender Address:", value=def_addr, key="cr_s_addr")
+            sender_city = st.text_input("Sender City/Pin:", value=def_city, key="cr_s_city")
+            rec_name = st.text_input("Recipient Name:", key="cr_r_name")
+            rec_address = st.text_input("Recipient Address:", key="cr_r_addr")
+            rec_city = st.text_input("Recipient City/Pin:", key="cr_r_city")
+
+        col3, col4, col5 = st.columns(3)
+        with col3: weight = st.text_input("Weight (Kg):", "1.0", key="cr_wt")
+        with col4: pcs = st.text_input("Pieces (Pcs):", "1", key="cr_pcs")
+        with col5: amount = st.text_input("Amount (RS):", key="cr_amt")
+
+        btn_col1, btn_col2 = st.columns(2)
+        with btn_col1:
+            save_only = st.button("💾 Save Entry Only (ફક્ત સેવ કરો)", type="secondary", use_container_width=True)
+        with btn_col2:
+            save_print = st.button("🖨️ Save & Generate Print (સેવ અને પ્રિન્ટ)", type="primary", use_container_width=True)
+
+        if save_only or save_print:
+            if not cons_no or not rec_name or not amount:
+                st.error("મહેરબાની કરીને Consignment No, Recipient Name અને Amount ભરો!")
+            else:
+                conn = sqlite3.connect("courier_database.db")
+                cursor = conn.cursor()
+                try:
+                    cursor.execute("""
+                        INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), selected_party.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Credit Account'))
+                    conn.commit()
+                    st.success(f"Credit Entry Saved for Party '{selected_party}' - Consignment: {cons_no}")
+
+                    if save_print:
+                        img = generate_exact_image(cons_no, date_entry, courier_co, mode, origin, dest, selected_party, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Credit Account')
+                        st.image(img, caption=f"Credit Receipt - {cons_no}", use_container_width=True)
+                        buf = io.BytesIO()
+                        img.save(buf, format="PNG")
+                        st.download_button(label="🖨️ Download Receipt Image", data=buf.getvalue(), file_name=f"Receipt_{cons_no}.png", mime="image/png")
+                except sqlite3.IntegrityError:
+                    st.error("આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે!")
+                conn.close()
+
+# ----------------- ૪. MONTHLY BILLING -----------------
+elif menu == "📊 Party Monthly Billing (માસિક બિલ બનાવટ)":
+    st.subheader("📊 Party Monthly Bill Generator")
+    st.info(f"📅 પસંદ કરેલ બિલિંગ સમયગાળો: *{start_str}* થી *{end_str}* (સાઇડબારમાંથી તારીખ બદલી શકો છો)")
+
+    conn = sqlite3.connect("courier_database.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT party_name FROM parties ORDER BY party_name ASC")
+    p_list = [r[0] for r in cursor.fetchall()]
+    conn.close()
+
+    if not p_list:
+        st.warning("કોઈ પાર્ટી ઉમેરેલી નથી.")
+    else:
+        sel_party = st.selectbox("Select Party for Bill (બિલ બનાવવાની પાર્ટી પસંદ કરો):", p_list)
+        if st.button("Generate Monthly Bill", type="primary"):
             conn = sqlite3.connect("courier_database.db")
             cursor = conn.cursor()
-            cursor.execute("SELECT cons_no, date, dest, rec_name, weight, amount FROM receipts WHERE sender_name LIKE ? AND booking_type='Credit Account'", (f"%{sel_party}%",))
-            rows = cursor.fetchall()
+            cursor.execute("SELECT cons_no, date, dest, rec_name, weight, amount FROM receipts WHERE sender_name=? AND booking_type='Credit Account'", (sel_party,))
+            b_rows = cursor.fetchall()
             conn.close()
 
-            if rows:
-                total_bill = 0
-                table_data = []
-                for r in rows:
-                    table_data.append({
-                        "Consignment": r[0],
-                        "Date": r[1],
-                        "Destination": r[2],
-                        "Recipient": r[3],
-                        "Weight": r[4],
-                        "Amount (RS)": r[5]
-                    })
-                    try: total_bill += float(r[5])
+            filtered_bill = []
+            tot_bill = 0
+
+            for r in b_rows:
+                rec_date_str = r[1]
+                try:
+                    rec_dt = datetime.datetime.strptime(rec_date_str, "%d/%m/%Y").date()
+                    if start_date <= rec_dt <= end_date:
+                        filtered_bill.append({"Consignment": r[0], "Date": r[1], "Destination": r[2], "Recipient": r[3], "Weight": r[4], "Amount (RS)": r[5]})
+                        tot_bill += float(r[5])
+                except:
+                    filtered_bill.append({"Consignment": r[0], "Date": r[1], "Destination": r[2], "Recipient": r[3], "Weight": r[4], "Amount (RS)": r[5]})
+                    try: tot_bill += float(r[5])
                     except: pass
-                
-                st.table(table_data)
-                st.success(f"Total Payable Bill for {sel_party}: RS {total_bill:,.2f}/-")
+
+            if filtered_bill:
+                st.write(f"### 📄 Monthly Bill Statement for: *{sel_party}* ({start_str} to {end_str})")
+                st.dataframe(filtered_bill, use_container_width=True)
+                st.success(f"💰 Total Monthly Payable Bill for '{sel_party}': RS {tot_bill:,.2f}/-")
             else:
-                st.info("આ પાર્ટી માટે કોઈ ક્રેડિટ બિલિંગ એન્ટ્રી મળી નથી.")
-    else:
-        st.warning("કોઈ પાર્ટી એડ કરેલી નથી.")
+                st.info(f"પાર્ટી '{sel_party}' માટે પસંદ કરેલી તારીખો વચ્ચે કોઈ ક્રેડિટ બુકિંગ મળેલ નથી.")
