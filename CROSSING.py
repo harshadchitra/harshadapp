@@ -40,7 +40,6 @@ def init_db():
         )
     """)
 
-    # જો જૂના ડેટાબેઝમાં bill_no કોલમ ન હોય તો ઓટોમેટિક ઉમેરી દેશે
     try:
         cursor.execute("ALTER TABLE receipts ADD COLUMN bill_no TEXT")
     except sqlite3.OperationalError:
@@ -146,7 +145,7 @@ def generate_pdf_invoice(bill_no, party_name, start_str, end_str, bill_date, ite
 
     total_data = [
         [Paragraph(f"<b>TOTAL PAYABLE AMOUNT:</b>", ParagraphStyle('TotLbl', parent=styles['Normal'], fontSize=12, alignment=2)),
-         Paragraph(f"<b>RS {total_amount:,.2f}/-</b>", ParagraphStyle('TotVal', parent=styles['Normal'], fontSize=12, textColor=colors.HexColor('#008000'), alignment=2))]
+         Paragraph(f"<b>RS {total_amount:,.2f}/-</b>", ParagraphStyle('TotVal', parent=styles['Normal'], fontSize=12, textColor=colors.HexColor('#008000'], alignment=2))]
     ]
     t_total = Table(total_data, colWidths=[380, 160])
     t_total.setStyle(TableStyle([
@@ -561,13 +560,13 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                     st.image(img, caption=f"Receipt - {rec_data[0]}", use_container_width=True)
                     buf = io.BytesIO()
                     img.save(buf, format="PNG")
-                    st.download_button(label="🖨️ Download Receipt Image", data=buf.getvalue(), file_name=f"Receipt_{rec_data[0]}.png", mime="image/png")
+                    st.download_button(label="🖨️ Download Receipt Image", data=buf.getvalue(), file_name=f"Receipt_{cons_no}.png", mime="image/png")
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
-# ----------------- ૪. DIGITAL MONTHLY BILLING (PDF INVOICE & HISTORY) -----------------
+# ----------------- ૪. DIGITAL MONTHLY BILLING (PDF INVOICE & HISTORY + DELETE) -----------------
 elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
-    st.subheader("📊 Party Digital PDF Invoice Generator & History")
+    st.subheader("📊 Party Digital PDF Invoice Generator, History & Delete")
     st.info(f"📅 પસંદ કરેલ બિલિંગ સમયગાળો: **{start_str}** થી **{end_str}**")
 
     conn = sqlite3.connect("courier_database.db")
@@ -675,7 +674,7 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
                     st.info(f"પાર્ટી '{sel_party}' માટે આ સમયગાળામાં કોઈ નવું અનબિલ થયેલ ક્રેડિટ બુકિંગ મળેલ નથી.")
 
     st.markdown("---")
-    st.subheader("📜 Generated Bills History (અગાઉ જનરેટ થયેલા બિલોની હિસ્ટ્રી)")
+    st.subheader("📜 Generated Bills History & Delete (બિલ હિસ્ટ્રી અને ડિલીટ ઓપ્શન)")
     conn = sqlite3.connect("courier_database.db")
     cursor = conn.cursor()
     cursor.execute("SELECT id, bill_no, party_name, bill_date, period, total_amount FROM bills ORDER BY id DESC")
@@ -683,20 +682,24 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
     conn.close()
 
     if all_bills:
-        bill_history_list = []
         for b in all_bills:
-            bill_history_list.append({
-                "Bill No": b[1],
-                "Party Name": b[2],
-                "Date": b[3],
-                "Period": b[4],
-                "Total Amount (RS)": f"RS {float(b[5]):,.2f}"
-            })
-        st.dataframe(bill_history_list, use_container_width=True)
+            col_b1, col_b2 = st.columns([4, 1])
+            with col_b1:
+                st.write(f"📄 **Bill No: {b[1]}** | Party: {b[2]} | Date: {b[3]} | Period: {b[4]} | **Amount: RS {b[5]}/-**")
+            with col_b2:
+                if st.button("🗑️ Delete Bill", key=f"del_bill_{b[0]}"):
+                    conn = sqlite3.connect("courier_database.db")
+                    cursor = conn.cursor()
+                    cursor.execute("UPDATE receipts SET bill_no=NULL WHERE bill_no=?", (b[1],))
+                    cursor.execute("DELETE FROM bills WHERE id=?", (b[0],))
+                    conn.commit()
+                    conn.close()
+                    st.success(f"બિલ નંબર {b[1]} સફળતાપૂર્વક ડિલીટ થઈ ગયું છે!")
+                    st.rerun()
     else:
         st.info("હજુ સુધી કોઈ બિલ જનરેટ થયેલ નથી.")
 
-# ----------------- ૫. PARTY PAYMENT RECEIVE WITH PDF RECEIPT -----------------
+# ----------------- ૫. PARTY PAYMENT RECEIVE WITH PDF RECEIPT & DELETE -----------------
 elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & રસીદ)":
     st.subheader("💳 Party Payment Receive & Receipt Generator")
     
@@ -742,7 +745,6 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
 
                     st.success(f"✅ પાર્ટી '{pay_party}' માટે (બિલ નં: {target_bill_no}) RS {pay_amount}/- સફળતાપૂર્વક જમા થઈ ગયા છે!")
 
-                    # Generate PDF Receipt
                     pay_pdf_bytes = generate_payment_pdf_receipt(rec_last_id, pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip())
 
                     st.download_button(
@@ -753,7 +755,7 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                     )
 
         st.markdown("---")
-        st.subheader("📜 Party Payment History & Receipt Download")
+        st.subheader("📜 Party Payment History & Delete (પેમેન્ટ હિસ્ટ્રી અને ડિલીટ ઓપ્શન)")
         
         conn = sqlite3.connect("courier_database.db")
         cursor = conn.cursor()
@@ -764,23 +766,22 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
         if pay_rows:
             tot_received = 0
             for r in pay_rows:
-                col_py1, col_py2, col_py3 = st.columns([3, 1, 1])
+                col_py1, col_py2, col_py3 = st.columns([3, 1.2, 1])
                 with col_py1:
                     st.write(f"🏢 **{r[1]}** | Bill: <span style='color:red;'><b>{r[2]}</b></span> | Date: {r[3]} | **RS {r[4]}/-** ({r[5]})", unsafe_allow_html=True)
                     try: tot_received += float(r[4])
                     except: pass
                 with col_py2:
-                    # PDF Receipt button for each history entry
                     hist_pdf = generate_payment_pdf_receipt(r[0], r[1], r[2], r[3], r[4], r[5], r[6])
-                    st.download_button("🖨️ Receipt", data=hist_pdf, file_name=f"Payment_Receipt_{r[0]}.pdf", mime="application/pdf", key=f"pdf_pay_{r[0]}")
+                    st.download_button("🖨️ Receipt PDF", data=hist_pdf, file_name=f"Payment_Receipt_{r[0]}.pdf", mime="application/pdf", key=f"pdf_pay_{r[0]}")
                 with col_py3:
-                    if st.button("🗑️ Delete", key=f"del_pay_{r[0]}"):
+                    if st.button("🗑️ Delete Pay", key=f"del_pay_{r[0]}"):
                         conn = sqlite3.connect("courier_database.db")
                         cursor = conn.cursor()
                         cursor.execute("DELETE FROM party_payments WHERE id=?", (r[0],))
                         conn.commit()
                         conn.close()
-                        st.success("પેમેન્ટ એન્ટ્રી ડિલીટ થઈ ગઈ છે!")
+                        st.success("પેમેન્ટ એન્ટ્રી સફળતાપૂર્વક ડિલીટ થઈ ગઈ છે!")
                         st.rerun()
             st.metric("💰 Total Payment Received", f"RS {tot_received:,.2f}/-")
         else:
