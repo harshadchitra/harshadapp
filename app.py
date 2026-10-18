@@ -44,12 +44,25 @@ def init_db():
             party_city TEXT
         )
     """)
+
+    # પાર્ટી પેમેન્ટ રિસીવ ટેબલ
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS party_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            party_name TEXT,
+            date TEXT,
+            amount TEXT,
+            pay_mode TEXT,
+            note TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
 
 init_db()
 
-# ----------------- HD પ્રિન્ટેબલ ઈમેજ ફંક્શન -----------------
+# ----------------- HD પ્રિન્ટેબલ ઈમેજ ફંક્શન (બુકિંગ માટે) -----------------
 def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type):
     width, height = 1200, 620
     img = Image.new("RGB", (width, height), "white")
@@ -126,7 +139,8 @@ menu = st.sidebar.radio("મેનુ પસંદ કરો (Menu)", [
     "➕ Add Account Party (પાર્ટી ઉમેરો)",
     "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)",
     "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)",
-    "📊 Party Monthly Billing (માસિક બિલ બનાવટ)"
+    "📊 Party Monthly Billing (માસિક બિલ બનાવટ)",
+    "💳 Party Payment Receive (પેમેન્ટ જમા)"
 ])
 
 st.sidebar.markdown("---")
@@ -164,19 +178,31 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
                 conn.close()
 
     st.markdown("---")
-    st.write("### 🏢 હાલમાં સેવ થયેલી પાર્ટીઓની યાદી:")
+    st.write("### 🏢 સેવ થયેલી પાર્ટીઓની યાદી & ડિલીટ:")
     conn = sqlite3.connect("courier_database.db")
     cursor = conn.cursor()
     cursor.execute("SELECT id, party_name, party_address, party_city FROM parties ORDER BY party_name ASC")
     p_rows = cursor.fetchall()
     conn.close()
+    
     if p_rows:
-        p_list = [{"ID": r[0], "Party Name": r[1], "Address": r[2], "City": r[3]} for r in p_rows]
-        st.dataframe(p_list, use_container_width=True)
+        for r in p_rows:
+            col_p1, col_p2 = st.columns([4, 1])
+            with col_p1:
+                st.write(f"🏢 *{r[1]}* | {r[2]} ({r[3]})")
+            with col_p2:
+                if st.button("🗑️ Delete", key=f"del_party_{r[0]}"):
+                    conn = sqlite3.connect("courier_database.db")
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM parties WHERE id=?", (r[0],))
+                    conn.commit()
+                    conn.close()
+                    st.success(f"પાર્ટી '{r[1]}' ડિલીટ થઈ ગઈ છે!")
+                    st.rerun()
 
 # ----------------- ૨. CASH BOOKING -----------------
 elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)":
-    tab1, tab2 = st.tabs(["💵 Cash Booking (નવી એન્ટ્રી)", "📜 Cash History & Collection (હિસ્ટ્રી)"])
+    tab1, tab2 = st.tabs(["💵 Cash Booking (નવી એન્ટ્રી)", "📜 Cash History & Collection (હિસ્ટ્રી & ડિલીટ)"])
 
     with tab1:
         st.subheader("Cash Courier Booking")
@@ -243,17 +269,29 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
             try:
                 rec_dt = datetime.datetime.strptime(rec_date_str, "%d/%m/%Y").date()
                 if start_date <= rec_dt <= end_date:
-                    filtered_cash.append({"ID": r[0], "Consignment": r[1], "Date": r[2], "Sender": r[3], "Recipient": r[4], "Amount (RS)": r[5]})
+                    filtered_cash.append(r)
                     tot_cash += float(r[5])
             except:
-                # જો તારીખ ફોર્મેટ મેચ ન થાય તો બાય ડિફોલ્ટ બતાવવું
-                filtered_cash.append({"ID": r[0], "Consignment": r[1], "Date": r[2], "Sender": r[3], "Recipient": r[4], "Amount (RS)": r[5]})
+                filtered_cash.append(r)
                 try: tot_cash += float(r[5])
                 except: pass
 
         if filtered_cash:
-            st.dataframe(filtered_cash, use_container_width=True)
             st.metric("💰 Selected Period Cash Collection", f"RS {tot_cash:,.2f}/-")
+            st.write("---")
+            for r in filtered_cash:
+                col_c1, col_c2 = st.columns([4, 1])
+                with col_c1:
+                    st.write(f"🧾 *Cons: {r[1]}* | Date: {r[2]} | From: {r[3]} ➔ To: {r[4]} | *Amount: RS {r[5]}/-*")
+                with col_c2:
+                    if st.button("🗑️ Delete", key=f"del_cash_{r[0]}"):
+                        conn = sqlite3.connect("courier_database.db")
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM receipts WHERE id=?", (r[0],))
+                        conn.commit()
+                        conn.close()
+                        st.success(f"Consignment {r[1]} ડિલીટ થઈ ગયું છે!")
+                        st.rerun()
         else:
             st.warning("આ પસંદ કરેલી તારીખ ગાળામાં કોઈ કેશ બુકિંગ એન્ટ્રી મળી નથી.")
 
@@ -330,10 +368,10 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                     st.error("આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે!")
                 conn.close()
 
-# ----------------- ૪. MONTHLY BILLING -----------------
+# ----------------- ૪. MONTHLY BILLING & PDF STATEMENT -----------------
 elif menu == "📊 Party Monthly Billing (માસિક બિલ બનાવટ)":
-    st.subheader("📊 Party Monthly Bill Generator")
-    st.info(f"📅 પસંદ કરેલ બિલિંગ સમયગાળો: *{start_str}* થી *{end_str}* (સાઇડબારમાંથી તારીખ બદલી શકો છો)")
+    st.subheader("📊 Party Monthly Bill & Statement Generator")
+    st.info(f"📅 પસંદ કરેલ બિલિંગ સમયગાળો: *{start_str}* થી *{end_str}*")
 
     conn = sqlite3.connect("courier_database.db")
     cursor = conn.cursor()
@@ -348,7 +386,7 @@ elif menu == "📊 Party Monthly Billing (માસિક બિલ બનાવ
         if st.button("Generate Monthly Bill", type="primary"):
             conn = sqlite3.connect("courier_database.db")
             cursor = conn.cursor()
-            cursor.execute("SELECT cons_no, date, dest, rec_name, weight, amount FROM receipts WHERE sender_name=? AND booking_type='Credit Account'", (sel_party,))
+            cursor.execute("SELECT id, cons_no, date, dest, rec_name, weight, amount FROM receipts WHERE sender_name=? AND booking_type='Credit Account' ORDER BY id DESC", (sel_party,))
             b_rows = cursor.fetchall()
             conn.close()
 
@@ -356,20 +394,117 @@ elif menu == "📊 Party Monthly Billing (માસિક બિલ બનાવ
             tot_bill = 0
 
             for r in b_rows:
-                rec_date_str = r[1]
+                rec_date_str = r[2]
                 try:
                     rec_dt = datetime.datetime.strptime(rec_date_str, "%d/%m/%Y").date()
                     if start_date <= rec_dt <= end_date:
-                        filtered_bill.append({"Consignment": r[0], "Date": r[1], "Destination": r[2], "Recipient": r[3], "Weight": r[4], "Amount (RS)": r[5]})
-                        tot_bill += float(r[5])
+                        filtered_bill.append(r)
+                        tot_bill += float(r[6])
                 except:
-                    filtered_bill.append({"Consignment": r[0], "Date": r[1], "Destination": r[2], "Recipient": r[3], "Weight": r[4], "Amount (RS)": r[5]})
-                    try: tot_bill += float(r[5])
+                    filtered_bill.append(r)
+                    try: tot_bill += float(r[6])
                     except: pass
 
             if filtered_bill:
                 st.write(f"### 📄 Monthly Bill Statement for: *{sel_party}* ({start_str} to {end_str})")
-                st.dataframe(filtered_bill, use_container_width=True)
                 st.success(f"💰 Total Monthly Payable Bill for '{sel_party}': RS {tot_bill:,.2f}/-")
+                
+                # --- WhatsApp / PDF / Text Statement Download ---
+                bill_text = f"--- COURIER SOLUTION BILL STATEMENT ---\n"
+                bill_text += f"Party: {sel_party}\nPeriod: {start_str} to {end_str}\n"
+                bill_text += f"----------------------------------------\n"
+                for idx, r in enumerate(filtered_bill, 1):
+                    bill_text += f"{idx}. Cons: {r[1]} | Date: {r[2]} | Dest: {r[3]} | Rec: {r[4]} | Wt: {r[5]}kg | Amt: {r[6]}/-\n"
+                bill_text += f"----------------------------------------\n"
+                bill_text += f"TOTAL PAYABLE AMOUNT: RS {tot_bill:,.2f}/-\n"
+                bill_text += f"----------------------------------------\n"
+
+                st.download_button(
+                    label="📥 Download Bill Statement (TXT/WhatsApp File)",
+                    data=bill_text,
+                    file_name=f"Bill_{sel_party}{start_str.replace('/','-')}_to{end_str.replace('/','-')}.txt",
+                    mime="text/plain"
+                )
+
+                st.write("---")
+                for r in filtered_bill:
+                    col_b1, col_b2 = st.columns([4, 1])
+                    with col_b1:
+                        st.write(f"🧾 *Cons: {r[1]}* | Date: {r[2]} | Dest: {r[3]} | Recipient: {r[4]} | Wt: {r[5]}kg | *Amount: RS {r[6]}/-*")
+                    with col_b2:
+                        if st.button("🗑️ Delete", key=f"del_credit_{r[0]}"):
+                            conn = sqlite3.connect("courier_database.db")
+                            cursor = conn.cursor()
+                            cursor.execute("DELETE FROM receipts WHERE id=?", (r[0],))
+                            conn.commit()
+                            conn.close()
+                            st.success(f"Consignment {r[1]} ડિલીટ થઈ ગયું છે!")
+                            st.rerun()
             else:
                 st.info(f"પાર્ટી '{sel_party}' માટે પસંદ કરેલી તારીખો વચ્ચે કોઈ ક્રેડિટ બુકિંગ મળેલ નથી.")
+
+# ----------------- ૫. PARTY PAYMENT RECEIVE -----------------
+elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા)":
+    st.subheader("💳 Party Payment Receive (પાર્ટી પેમેન્ટ જમા લો)")
+    
+    conn = sqlite3.connect("courier_database.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT party_name FROM parties ORDER BY party_name ASC")
+    p_list = [r[0] for r in cursor.fetchall()]
+    conn.close()
+
+    if not p_list:
+        st.warning("⚠️ પહેલા મેનુમાંથી 'Add Account Party' પસંદ કરીને પાર્ટી ઉમેરો!")
+    else:
+        with st.form("payment_form", clear_on_submit=True):
+            pay_party = st.selectbox("Select Party Name (પાર્ટી સિલેક્ટ કરો):", p_list)
+            pay_date = st.text_input("Payment Date (તારીખ):", value=today.strftime("%d/%m/%Y"))
+            pay_amount = st.text_input("Payment Amount (રકમ RS):")
+            pay_mode = st.selectbox("Payment Mode (પેમેન્ટ મોડ):", ["Cash (રોકડ)", "UPI (ગૂગલપે/ફોનપે)", "Cheque (ચેક)"])
+            pay_note = st.text_input("Note / Cheque No / Reference (નોંધ):")
+            
+            submit_pay = st.form_submit_button("💾 Save Payment Receive (પેમેન્ટ જમા કરો)", type="primary")
+
+            if submit_pay:
+                if not pay_amount.strip():
+                    st.error("મહેરબાની કરીને જમા લેવાની રકમ ભરો!")
+                else:
+                    conn = sqlite3.connect("courier_database.db")
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        INSERT INTO party_payments (party_name, date, amount, pay_mode, note)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (pay_party.strip(), pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip()))
+                    conn.commit()
+                    conn.close()
+                    st.success(f"પાર્ટી '{pay_party}' પાસેથી RS {pay_amount}/- સફળતાપૂર્વક જમા થઈ ગયા છે! ({pay_mode})")
+
+        st.markdown("---")
+        st.subheader("📜 Party Payment History (જમા થયેલા પેમેન્ટની હિસ્ટ્રી)")
+        
+        conn = sqlite3.connect("courier_database.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, party_name, date, amount, pay_mode, note FROM party_payments ORDER BY id DESC")
+        pay_rows = cursor.fetchall()
+        conn.close()
+
+        if pay_rows:
+            tot_received = 0
+            for r in pay_rows:
+                col_py1, col_py2 = st.columns([4, 1])
+                with col_py1:
+                    st.write(f"🏢 *{r[1]}* | Date: {r[2]} | *RS {r[3]}/-* ({r[4]}) {f'| Note: {r[5]}' if r[5] else ''}")
+                    try: tot_received += float(r[3])
+                    except: pass
+                with col_py2:
+                    if st.button("🗑️ Delete", key=f"del_pay_{r[0]}"):
+                        conn = sqlite3.connect("courier_database.db")
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM party_payments WHERE id=?", (r[0],))
+                        conn.commit()
+                        conn.close()
+                        st.success("પેમેન્ટ એન્ટ્રી ડિલીટ થઈ ગઈ છે!")
+                        st.rerun()
+            st.metric("💰 Total Payment Received", f"RS {tot_received:,.2f}/-")
+        else:
+            st.info("કોઈ પેમેન્ટ રિસીવ રેકોર્ડ મળેલ નથી.")
