@@ -11,7 +11,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 # Page Configuration
 st.set_page_config(page_title="Courier Solution", page_icon="📦", layout="centered")
 
-# ----------------- ડેટાબેઝ સેટઅપ (ઓટો-અપડેટ એરર વગરનું) -----------------
+# ----------------- ડેટાબેઝ સેટઅપ -----------------
 def init_db():
     conn = sqlite3.connect("courier_database.db")
     cursor = conn.cursor()
@@ -144,8 +144,10 @@ def generate_pdf_invoice(bill_no, party_name, start_str, end_str, bill_date, ite
     story.append(Spacer(1, 15))
 
     total_data = [
-        [Paragraph(f"<b>TOTAL PAYABLE AMOUNT:</b>", ParagraphStyle('TotLbl', parent=styles['Normal'], fontSize=12, alignment=2)),
-         Paragraph(f"<b>RS {total_amount:,.2f}/-</b>", ParagraphStyle('TotVal', parent=styles['Normal'], fontSize=12, textColor=colors.HexColor('#008000'], alignment=2))]
+        [
+            Paragraph("<b>TOTAL PAYABLE AMOUNT:</b>", ParagraphStyle('TotLbl', parent=styles['Normal'], fontSize=12, alignment=2)),
+            Paragraph(f"<b>RS {total_amount:,.2f}/-</b>", ParagraphStyle('TotVal', parent=styles['Normal'], fontSize=12, textColor=colors.HexColor('#008000'), alignment=2))
+        ]
     ]
     t_total = Table(total_data, colWidths=[380, 160])
     t_total.setStyle(TableStyle([
@@ -560,7 +562,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                     st.image(img, caption=f"Receipt - {rec_data[0]}", use_container_width=True)
                     buf = io.BytesIO()
                     img.save(buf, format="PNG")
-                    st.download_button(label="🖨️ Download Receipt Image", data=buf.getvalue(), file_name=f"Receipt_{cons_no}.png", mime="image/png")
+                    st.download_button(label="🖨️ Download Receipt Image", data=buf.getvalue(), file_name=f"Receipt_{rec_data[0]}.png", mime="image/png")
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
@@ -715,75 +717,5 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
     bill_options = ["-- Select Bill No (બિલ નં પસંદ કરો) --"] + [f"{b[0]} | {b[1]} | RS {b[2]}/-" for b in b_list]
 
     if not p_list:
-        st.warning("⚠️ પહેલા મેનુમાંથી 'Add Account Party' પસંદ કરીને પાર્ટી ઉમેરો!")
-    else:
-        with st.form("payment_form", clear_on_submit=False):
-            selected_bill_opt = st.selectbox("Select Bill No for Payment (જે બિલનું પેમેન્ટ આવ્યુ હોય તે બિલ નં પસંદ કરો):", bill_options)
-            pay_party = st.selectbox("Select Party Name (પાર્ટીનું નામ):", p_list)
-            pay_date = st.text_input("Payment Date (તારીખ):", value=today.strftime("%d/%m/%Y"))
-            pay_amount = st.text_input("Payment Amount (જમા થયેલ રકમ RS):")
-            pay_mode = st.selectbox("Payment Mode (પેમેન્ટ મોડ):", ["Cash (રોકડ)", "UPI (ગૂગલપે/ફોનપે)", "Cheque (ચેક)"])
-            pay_note = st.text_input("Note / Cheque No / Reference (નોંધ):")
-            
-            submit_pay = st.form_submit_button("💾 Save Payment & Generate Receipt (જમા કરો અને રસીદ બનાવો)", type="primary")
-
-            if submit_pay:
-                if not pay_amount.strip():
-                    st.error("મહેરબાની કરીને જમા લેવાની રકમ ભરો!")
-                else:
-                    target_bill_no = selected_bill_opt.split(" | ")[0] if "-- Select" not in selected_bill_opt else "DIRECT"
-                    
-                    conn = sqlite3.connect("courier_database.db")
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        INSERT INTO party_payments (party_name, bill_no, date, amount, pay_mode, note)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip()))
-                    rec_last_id = cursor.lastrowid
-                    conn.commit()
-                    conn.close()
-
-                    st.success(f"✅ પાર્ટી '{pay_party}' માટે (બિલ નં: {target_bill_no}) RS {pay_amount}/- સફળતાપૂર્વક જમા થઈ ગયા છે!")
-
-                    pay_pdf_bytes = generate_payment_pdf_receipt(rec_last_id, pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip())
-
-                    st.download_button(
-                        label="📄 Download Payment Receipt PDF (પેમેન્ટ જમા રસીદ ડાઉનલોડ કરો)",
-                        data=pay_pdf_bytes,
-                        file_name=f"Payment_Receipt_REC{rec_last_id:04d}_{pay_party}.pdf",
-                        mime="application/pdf"
-                    )
-
-        st.markdown("---")
-        st.subheader("📜 Party Payment History & Delete (પેમેન્ટ હિસ્ટ્રી અને ડિલીટ ઓપ્શન)")
-        
-        conn = sqlite3.connect("courier_database.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, party_name, bill_no, date, amount, pay_mode, note FROM party_payments ORDER BY id DESC")
-        pay_rows = cursor.fetchall()
-        conn.close()
-
-        if pay_rows:
-            tot_received = 0
-            for r in pay_rows:
-                col_py1, col_py2, col_py3 = st.columns([3, 1.2, 1])
-                with col_py1:
-                    st.write(f"🏢 **{r[1]}** | Bill: <span style='color:red;'><b>{r[2]}</b></span> | Date: {r[3]} | **RS {r[4]}/-** ({r[5]})", unsafe_allow_html=True)
-                    try: tot_received += float(r[4])
-                    except: pass
-                with col_py2:
-                    hist_pdf = generate_payment_pdf_receipt(r[0], r[1], r[2], r[3], r[4], r[5], r[6])
-                    st.download_button("🖨️ Receipt PDF", data=hist_pdf, file_name=f"Payment_Receipt_{r[0]}.pdf", mime="application/pdf", key=f"pdf_pay_{r[0]}")
-                with col_py3:
-                    if st.button("🗑️ Delete Pay", key=f"del_pay_{r[0]}"):
-                        conn = sqlite3.connect("courier_database.db")
-                        cursor = conn.cursor()
-                        cursor.execute("DELETE FROM party_payments WHERE id=?", (r[0],))
-                        conn.commit()
-                        conn.close()
-                        st.success("પેમેન્ટ એન્ટ્રી સફળતાપૂર્વક ડિલીટ થઈ ગઈ છે!")
-                        st.rerun()
-            st.metric("💰 Total Payment Received", f"RS {tot_received:,.2f}/-")
-        else:
-            st.info("કોઈ પેમેન્ટ રિસીવ રેકોર્ડ મળેલ નથી.")
+        st.
 
