@@ -701,7 +701,7 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
     else:
         st.info("હજુ સુધી કોઈ બિલ જનરેટ થયેલ નથી.")
 
-# ----------------- ૫. PARTY PAYMENT RECEIVE WITH PDF RECEIPT & DELETE -----------------
+# ----------------- ૫. PARTY PAYMENT RECEIVE WITH PDF RECEIPT & AUTO-FILTER PAID BILLS -----------------
 elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & રસીદ)":
     st.subheader("💳 Party Payment Receive & Receipt Generator")
     
@@ -712,16 +712,33 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
     
     cursor.execute("SELECT bill_no, party_name, total_amount FROM bills ORDER BY id DESC")
     b_list = cursor.fetchall()
+    
+    # જે બિલ સંપૂર્ણપણે ભરાઈ ગયા છે તેમને લિસ્ટમાંથી ફિલ્ટર કરી કાઢી નાખો
+    unpaid_b_list = []
+    for b in b_list:
+        b_no = b[0]
+        try:
+            b_tot = float(b[2])
+        except:
+            b_tot = 0.0
+            
+        cursor.execute("SELECT SUM(CAST(amount AS FLOAT)) FROM party_payments WHERE bill_no=?", (b_no,))
+        sum_paid = cursor.fetchone()[0]
+        sum_paid = float(sum_paid) if sum_paid else 0.0
+        
+        # જો જમા રકમ બિલ રકમ કરતા ઓછી હોય તો જ તેને બાકી બિલ તરીકે બતાવો
+        if sum_paid < b_tot:
+            unpaid_b_list.append(b)
+
     conn.close()
 
-    bill_options = ["-- Select Bill No (બિલ નં પસંદ કરો) --"] + [f"{b[0]} | {b[1]} | RS {b[2]}/-" for b in b_list]
+    bill_options = ["-- Select Bill No (બિલ નં પસંદ કરો) --"] + [f"{b[0]} | {b[1]} | RS {b[2]}/-" for b in unpaid_b_list]
 
     if not p_list:
         st.warning("⚠️ પહેલા મેનુમાંથી 'Add Account Party' પસંદ કરીને પાર્ટી ઉમેરો!")
     else:
-        # Form for input
         with st.form("payment_form", clear_on_submit=False):
-            selected_bill_opt = st.selectbox("Select Bill No for Payment (જે બિલનું પેમેન્ટ આવ્યુ હોય તે બિલ નં પસંદ કરો):", bill_options)
+            selected_bill_opt = st.selectbox("Select Pending Bill No (જે બિલનું પેમેન્ટ બાકી હોય તે પસંદ કરો):", bill_options)
             pay_party = st.selectbox("Select Party Name (પાર્ટીનું નામ):", p_list)
             pay_date = st.text_input("Payment Date (તારીખ):", value=today.strftime("%d/%m/%Y"))
             pay_amount = st.text_input("Payment Amount (જમા થયેલ રકમ RS):")
@@ -730,7 +747,6 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
             
             submit_pay = st.form_submit_button("💾 Save Payment (પેમેન્ટ સેવ કરો)", type="primary")
 
-        # Process outside form to prevent layout context error
         if submit_pay:
             if not pay_amount.strip():
                 st.error("મહેરબાની કરીને જમા લેવાની રકમ ભરો!")
@@ -757,6 +773,8 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                     file_name=f"Payment_Receipt_REC{rec_last_id:04d}_{pay_party}.pdf",
                     mime="application/pdf"
                 )
+                
+                st.rerun()
 
         st.markdown("---")
         st.subheader("📜 Party Payment History & Delete (પેમેન્ટ હિસ્ટ્રી અને ડિલીટ ઓપ્શન)")
