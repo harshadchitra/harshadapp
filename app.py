@@ -3,6 +3,10 @@ import sqlite3
 import datetime
 import io
 from PIL import Image, ImageDraw, ImageFont
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 # Page Configuration
 st.set_page_config(page_title="Courier Solution", page_icon="📦", layout="centered")
@@ -76,7 +80,90 @@ def init_db():
 
 init_db()
 
-# ----------------- HD પ્રિન્ટેબલ ઈમેજ ફંક્શન (રસીદ માટે) -----------------
+# ----------------- PDF INVOICE GENERATOR -----------------
+def generate_pdf_invoice(bill_no, party_name, start_str, end_str, bill_date, items, total_amount):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    story = []
+    styles = getSampleStyleSheet()
+
+    # Custom Styles
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=22, textColor=colors.HexColor('#002147'), alignment=1, spaceAfter=2)
+    sub_title_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#555555'), alignment=1, spaceAfter=15)
+    invoice_head_style = ParagraphStyle('InvHead', parent=styles['Heading2'], fontSize=14, textColor=colors.HexColor('#d9534f'), alignment=1, spaceAfter=15)
+    normal_style = ParagraphStyle('NormalStyle', parent=styles['Normal'], fontSize=10, textColor=colors.black, leading=14)
+    bold_style = ParagraphStyle('BoldStyle', parent=styles['Normal'], fontSize=10, textColor=colors.black, fontName='Helvetica-Bold', leading=14)
+
+    # Header
+    story.append(Paragraph("COURIER SOLUTION", title_style))
+    story.append(Paragraph("Express Cargo & Logistics Services", sub_title_style))
+    story.append(Paragraph("TAX INVOICE / MONTHLY BILL", invoice_head_style))
+
+    # Party & Bill Details Box
+    details_data = [
+        [
+            Paragraph(f"<b>Invoice To:</b><br/><font size=12 color='#002147'><b>{party_name}</b></font><br/>Billing Period: {start_str} to {end_str}", normal_style),
+            Paragraph(f"<b>Invoice No:</b> <font color='red'><b>{bill_no}</b></font><br/><b>Date:</b> {bill_date}<br/><b>Status:</b> UNPAID", normal_style)
+        ]
+    ]
+    t_details = Table(details_data, colWidths=[300, 240])
+    t_details.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8f9fa')),
+        ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#002147')),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('PADDING', (0,0), (-1,-1), 8),
+    ]))
+    story.append(t_details)
+    story.append(Spacer(1, 15))
+
+    # Table Header
+    headers = [Paragraph('<b>Sr</b>', bold_style), Paragraph('<b>Consignment No</b>', bold_style), Paragraph('<b>Date</b>', bold_style), Paragraph('<b>Destination</b>', bold_style), Paragraph('<b>Recipient</b>', bold_style), Paragraph('<b>Wt(kg)</b>', bold_style), Paragraph('<b>Amount(RS)</b>', bold_style)]
+    data = [headers]
+
+    for idx, r in enumerate(items, 1):
+        data.append([
+            Paragraph(str(idx), normal_style),
+            Paragraph(r[1], normal_style),
+            Paragraph(r[2], normal_style),
+            Paragraph(r[3], normal_style),
+            Paragraph(r[4], normal_style),
+            Paragraph(str(r[5]), normal_style),
+            Paragraph(f"RS {float(r[6]):,.2f}", normal_style)
+        ])
+
+    t_items = Table(data, colWidths=[30, 100, 75, 100, 115, 45, 75])
+    t_items.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#002147')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
+        ('PADDING', (0,0), (-1,-1), 5),
+    ]))
+    story.append(t_items)
+    story.append(Spacer(1, 15))
+
+    # Total Amount Box
+    total_data = [
+        [Paragraph(f"<b>TOTAL PAYABLE AMOUNT:</b>", ParagraphStyle('TotLbl', parent=styles['Normal'], fontSize=12, alignment=2)),
+         Paragraph(f"<b>RS {total_amount:,.2f}/-</b>", ParagraphStyle('TotVal', parent=styles['Normal'], fontSize=12, textColor=colors.HexColor('#008000'), alignment=2))]
+    ]
+    t_total = Table(total_data, colWidths=[380, 160])
+    t_total.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#e8f5e9')),
+        ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#008000')),
+        ('PADDING', (0,0), (-1,-1), 8),
+    ]))
+    story.append(t_total)
+    story.append(Spacer(1, 20))
+
+    # Footer Notes
+    story.append(Paragraph("<i>* Subject to Terms & Conditions. Payment due within 7 days.</i>", ParagraphStyle('Foot', parent=styles['Normal'], fontSize=8, textColor=colors.gray)))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+# ----------------- HD PRINTS (BOOKING) -----------------
 def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type):
     width, height = 1200, 620
     img = Image.new("RGB", (width, height), "white")
@@ -153,7 +240,7 @@ menu = st.sidebar.radio("મેનુ પસંદ કરો (Menu)", [
     "➕ Add Account Party (પાર્ટી ઉમેરો)",
     "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)",
     "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)",
-    "📊 Party Monthly Billing (ડિજિટલ બિલ)",
+    "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)",
     "💳 Party Payment Receive (પેમેન્ટ જમા વિથ બિલ નં)"
 ])
 
@@ -431,9 +518,9 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
-# ----------------- ૪. DIGITAL MONTHLY BILLING -----------------
-elif menu == "📊 Party Monthly Billing (ડિજિટલ બિલ)":
-    st.subheader("📊 Party Digital Invoice & Monthly Bill Generator")
+# ----------------- ૪. DIGITAL MONTHLY BILLING (PDF INVOICE) -----------------
+elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
+    st.subheader("📊 Party Digital PDF Invoice Generator")
     st.info(f"📅 પસંદ કરેલ બિલિંગ સમયગાળો: *{start_str}* થી *{end_str}*")
 
     conn = sqlite3.connect("courier_database.db")
@@ -441,7 +528,6 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ બિલ)":
     cursor.execute("SELECT party_name FROM parties ORDER BY party_name ASC")
     p_list = [r[0] for r in cursor.fetchall()]
     
-    # ઓટો બિલ નંબર જનરેટ
     cursor.execute("SELECT COUNT(*) FROM bills")
     b_count = cursor.fetchone()[0] + 1
     generated_bill_no = f"BILL-2026-{b_count:03d}"
@@ -456,7 +542,7 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ બિલ)":
         with col_b2:
             st.text_input("Generated Bill No (ઓટો બિલ નંબર):", value=generated_bill_no, disabled=True)
 
-        if st.button("⚡ Generate Modern Digital Bill", type="primary"):
+        if st.button("📄 Generate & Create Digital PDF Invoice", type="primary"):
             conn = sqlite3.connect("courier_database.db")
             cursor = conn.cursor()
             cursor.execute("SELECT id, cons_no, date, dest, rec_name, weight, amount FROM receipts WHERE sender_name=? AND booking_type='Credit Account' ORDER BY id DESC", (sel_party,))
@@ -478,12 +564,10 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ બિલ)":
                     except: pass
 
             if filtered_bill:
-                # બિલ ડેટાબેઝમાં પણ સેવ કરો
+                # Save Bill DB
                 try:
                     cursor.execute("INSERT INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (?, ?, ?, ?, ?)",
                                    (generated_bill_no, sel_party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
-                    
-                    # કન્સાઇનમેન્ટ સાથે બિલ નંબર કનેક્ટ કરો
                     for item in filtered_bill:
                         cursor.execute("UPDATE receipts SET bill_no=? WHERE id=?", (generated_bill_no, item[0]))
                     conn.commit()
@@ -491,30 +575,19 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ બિલ)":
                     pass
                 conn.close()
 
-                # --- મોડર્ન ડિજિટલ બિલ લુક (HTML/CSS) ---
-                st.markdown(f"""
-                <div style="border: 2px solid #002147; padding: 20px; border-radius: 10px; background-color: #ffffff;">
-                    <div style="text-align: center; border-bottom: 2px solid #002147; padding-bottom: 10px;">
-                        <h2 style="color: #002147; margin:0;">📦 COURIER SOLUTION</h2>
-                        <p style="margin:0; color: #555;">Express Cargo & Logistics Services</p>
-                        <h4 style="color: #d9534f; margin: 5px 0 0 0;">TAX INVOICE / MONTHLY BILL</h4>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; margin-top: 15px; font-size: 14px;">
-                        <div>
-                            <b>Invoice To:</b> <br>
-                            <span style="font-size: 16px; color: #002147;"><b>{sel_party}</b></span><br>
-                            Period: {start_str} to {end_str}
-                        </div>
-                        <div style="text-align: right;">
-                            <b>Invoice No:</b> <span style="color: red;">{generated_bill_no}</span><br>
-                            <b>Date:</b> {today.strftime("%d/%m/%Y")}<br>
-                            <b>Status:</b> <span style="color: orange; font-weight: bold;">UNPAID</span>
-                        </div>
-                    </div>
-                    <hr>
-                </div>
-                """, unsafe_allow_html=True)
+                # Generate PDF
+                pdf_bytes = generate_pdf_invoice(generated_bill_no, sel_party, start_str, end_str, today.strftime("%d/%m/%Y"), filtered_bill, tot_bill)
 
+                st.success(f"✅ પાર્ટી '{sel_party}' નું બિલ સફળતાપૂર્વક જનરેટ થઈ ગયું છે!")
+                
+                st.download_button(
+                    label="📄 Download Digital Invoice PDF (પીડીએફ ડાઉનલોડ કરો)",
+                    data=pdf_bytes,
+                    file_name=f"Invoice_{generated_bill_no}_{sel_party}.pdf",
+                    mime="application/pdf"
+                )
+
+                # Screen Preview Table
                 table_data = []
                 for idx, r in enumerate(filtered_bill, 1):
                     table_data.append({
@@ -528,30 +601,7 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ બિલ)":
                     })
                 
                 st.table(table_data)
-                st.markdown(f"""
-                <div style="text-align: right; font-size: 18px; color: #008000; padding: 10px; background-color: #e8f5e9; border-radius: 5px;">
-                    <b>TOTAL PAYABLE AMOUNT: ₹ {tot_bill:,.2f}/-</b>
-                </div>
-                """, unsafe_allow_html=True)
-
-                # વોટ્સએપ મોકલવા માટે ડાઉનલોડ બટન
-                bill_text = f"📦 COURIER SOLUTION - INVOICE\n"
-                bill_text += f"Invoice No: {generated_bill_no}\n"
-                bill_text += f"Party Name: {sel_party}\n"
-                bill_text += f"Period: {start_str} to {end_str}\n"
-                bill_text += f"------------------------------------\n"
-                for idx, r in enumerate(filtered_bill, 1):
-                    bill_text += f"{idx}. {r[1]} | {r[2]} | {r[3]} | ₹{r[6]}/-\n"
-                bill_text += f"------------------------------------\n"
-                bill_text += f"TOTAL PAYABLE: ₹ {tot_bill:,.2f}/-\n"
-                bill_text += f"------------------------------------"
-
-                st.download_button(
-                    label="📥 Download WhatsApp Digital Bill File",
-                    data=bill_text,
-                    file_name=f"Invoice_{generated_bill_no}_{sel_party}.txt",
-                    mime="text/plain"
-                )
+                st.metric("Total Payable Bill Amount", f"RS {tot_bill:,.2f}/-")
             else:
                 conn.close()
                 st.info(f"પાર્ટી '{sel_party}' માટે પસંદ કરેલી તારીખો વચ્ચે કોઈ ક્રેડિટ બુકિંગ મળેલ નથી.")
@@ -579,7 +629,7 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા વિ
             pay_party = st.selectbox("Select Party Name (પાર્ટીનું નામ):", p_list)
             pay_date = st.text_input("Payment Date (તારીખ):", value=today.strftime("%d/%m/%Y"))
             pay_amount = st.text_input("Payment Amount (જમા થયેલ રકમ RS):")
-            pay_mode = st.selectbox("Payment Mode (પેમેન્ટ મોડ):", ["Cash (રોકડ)", "UPI (ગૂગલપે/ફોનપે)", "Cheque (ચેક)"])
+            pay_mode = st.selectbox("Payment Mode (પેમેન્ટ મોડ):", ["Cash (રોકડ)", "UPI (ગૂગલપે/โฟનપે)", "Cheque (ચેક)"])
             pay_note = st.text_input("Note / Cheque No / Reference (નોંધ):")
             
             submit_pay = st.form_submit_button("💾 Save Payment Receive (જમા કરો)", type="primary")
