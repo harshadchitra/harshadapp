@@ -719,6 +719,7 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
     if not p_list:
         st.warning("⚠️ પહેલા મેનુમાંથી 'Add Account Party' પસંદ કરીને પાર્ટી ઉમેરો!")
     else:
+        # Form for input
         with st.form("payment_form", clear_on_submit=False):
             selected_bill_opt = st.selectbox("Select Bill No for Payment (જે બિલનું પેમેન્ટ આવ્યુ હોય તે બિલ નં પસંદ કરો):", bill_options)
             pay_party = st.selectbox("Select Party Name (પાર્ટીનું નામ):", p_list)
@@ -727,34 +728,35 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
             pay_mode = st.selectbox("Payment Mode (પેમેન્ટ મોડ):", ["Cash (રોકડ)", "UPI (ગૂગલપે/ફોનપે)", "Cheque (ચેક)"])
             pay_note = st.text_input("Note / Cheque No / Reference (નોંધ):")
             
-            submit_pay = st.form_submit_button("💾 Save Payment & Generate Receipt (જમા કરો અને રસીદ બનાવો)", type="primary")
+            submit_pay = st.form_submit_button("💾 Save Payment (પેમેન્ટ સેવ કરો)", type="primary")
 
-            if submit_pay:
-                if not pay_amount.strip():
-                    st.error("મહેરબાની કરીને જમા લેવાની રકમ ભરો!")
-                else:
-                    target_bill_no = selected_bill_opt.split(" | ")[0] if "-- Select" not in selected_bill_opt else "DIRECT"
-                    
-                    conn = sqlite3.connect("courier_database.db")
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        INSERT INTO party_payments (party_name, bill_no, date, amount, pay_mode, note)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip()))
-                    rec_last_id = cursor.lastrowid
-                    conn.commit()
-                    conn.close()
+        # Process outside form to prevent layout context error
+        if submit_pay:
+            if not pay_amount.strip():
+                st.error("મહેરબાની કરીને જમા લેવાની રકમ ભરો!")
+            else:
+                target_bill_no = selected_bill_opt.split(" | ")[0] if "-- Select" not in selected_bill_opt else "DIRECT"
+                
+                conn = sqlite3.connect("courier_database.db")
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO party_payments (party_name, bill_no, date, amount, pay_mode, note)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip()))
+                rec_last_id = cursor.lastrowid
+                conn.commit()
+                conn.close()
 
-                    st.success(f"✅ પાર્ટી '{pay_party}' માટે (બિલ નં: {target_bill_no}) RS {pay_amount}/- સફળતાપૂર્વક જમા થઈ ગયા છે!")
+                st.success(f"✅ પાર્ટી '{pay_party}' માટે (બિલ નં: {target_bill_no}) RS {pay_amount}/- સફળતાપૂર્વક જમા થઈ ગયા છે!")
 
-                    pay_pdf_bytes = generate_payment_pdf_receipt(rec_last_id, pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip())
+                pay_pdf_bytes = generate_payment_pdf_receipt(rec_last_id, pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip())
 
-                    st.download_button(
-                        label="📄 Download Payment Receipt PDF (પેમેન્ટ જમા રસીદ ડાઉનલોડ કરો)",
-                        data=pay_pdf_bytes,
-                        file_name=f"Payment_Receipt_REC{rec_last_id:04d}_{pay_party}.pdf",
-                        mime="application/pdf"
-                    )
+                st.download_button(
+                    label="📄 Download Payment Receipt PDF (પેમેન્ટ જમા રસીદ ડાઉનલોડ કરો)",
+                    data=pay_pdf_bytes,
+                    file_name=f"Payment_Receipt_REC{rec_last_id:04d}_{pay_party}.pdf",
+                    mime="application/pdf"
+                )
 
         st.markdown("---")
         st.subheader("📜 Party Payment History & Delete (પેમેન્ટ હિસ્ટ્રી અને ડિલીટ ઓપ્શન)")
