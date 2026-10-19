@@ -629,7 +629,7 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                     
                     pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Cash')
                     
-                    st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
+                    st.download_button(label="📄 Step 1: Download Printable PDF Receipt", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
 
                     # 📲 WHATSAPP BUTTON
                     if c_whatsapp_num.strip():
@@ -646,7 +646,7 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                             "Thank you for choosing Courier Solution!"
                         )
                         wa_url = create_whatsapp_link(c_whatsapp_num.strip(), wa_msg)
-                        st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Send Receipt on WhatsApp</a>', unsafe_allow_html=True)
+                        st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Step 2: Send Confirmation on WhatsApp</a>', unsafe_allow_html=True)
 
                 except sqlite3.IntegrityError:
                     st.error("આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે!")
@@ -786,7 +786,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
 
                         if save_print:
                             pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, selected_party, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Credit Account')
-                            st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
+                            st.download_button(label="📄 Step 1: Download PDF Receipt", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
 
                         # 📲 WHATSAPP BUTTON FOR CREDIT BOOKING
                         if cr_wa_mob.strip():
@@ -802,7 +802,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                                 "Thank you for business with Courier Solution!"
                             )
                             wa_url = create_whatsapp_link(cr_wa_mob.strip(), wa_msg)
-                            st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Send Confirmation on WhatsApp</a>', unsafe_allow_html=True)
+                            st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Step 2: Send Confirmation on WhatsApp</a>', unsafe_allow_html=True)
 
                     except sqlite3.IntegrityError:
                         st.error("આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે!")
@@ -1040,7 +1040,7 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
                         pdf_bytes = generate_pdf_invoice(generated_bill_no, sel_party, start_str, end_str, today.strftime("%d/%m/%Y"), filtered_bill, tot_bill)
                         st.success(f"✅ પાર્ટી '{sel_party}' નું બિલ સફળતાપૂર્વક જનરેટ થઈ ગયું છે!")
                         
-                        st.download_button(label="📄 Download Digital Invoice PDF", data=pdf_bytes, file_name=f"Invoice_{generated_bill_no}_{sel_party}.pdf", mime="application/pdf")
+                        st.download_button(label="📄 Step 1: Download Digital Invoice PDF", data=pdf_bytes, file_name=f"Invoice_{generated_bill_no}_{sel_party}.pdf", mime="application/pdf")
 
                         # 📲 WHATSAPP BILL SHARE
                         if bill_party_mob.strip():
@@ -1054,7 +1054,7 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
                                 "Thank you for business with Courier Solution!"
                             )
                             wa_bill_url = create_whatsapp_link(bill_party_mob.strip(), wa_bill_msg)
-                            st.markdown(f'<a href="{wa_bill_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Share Bill Details on WhatsApp</a>', unsafe_allow_html=True)
+                            st.markdown(f'<a href="{wa_bill_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Step 2: Share Bill Details on WhatsApp</a>', unsafe_allow_html=True)
                     else:
                         conn.close()
                         st.info("કોઈ અનબિલ એન્ટ્રી મળી નથી.")
@@ -1142,7 +1142,7 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                 st.success(f"✅ પાર્ટી '{pay_party}' ના RS {pay_amount}/- જમા થઈ ગયા છે!")
 
                 pay_pdf_bytes = generate_payment_pdf_receipt(rec_last_id, pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip())
-                st.download_button(label="📄 Download Payment Receipt PDF", data=pay_pdf_bytes, file_name=f"Payment_Receipt_REC{rec_last_id:04d}_{pay_party}.pdf", mime="application/pdf")
+                st.download_button(label="📄 Step 1: Download Payment Receipt PDF", data=pay_pdf_bytes, file_name=f"Payment_Receipt_REC{rec_last_id:04d}_{pay_party}.pdf", mime="application/pdf")
 
                 # 📲 WHATSAPP PAYMENT RECEIPT
                 if pay_mob.strip():
@@ -1157,7 +1157,7 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                         "Thank you for payment! - Courier Solution"
                     )
                     wa_pay_url = create_whatsapp_link(pay_mob.strip(), wa_pay_msg)
-                    st.markdown(f'<a href="{wa_pay_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Send Payment Receipt on WhatsApp</a>', unsafe_allow_html=True)
+                    st.markdown(f'<a href="{wa_pay_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Step 2: Send Payment Receipt on WhatsApp</a>', unsafe_allow_html=True)
 
     st.markdown("---")
     st.subheader("📜 Party Payment History & Delete")
