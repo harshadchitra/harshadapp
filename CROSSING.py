@@ -2,6 +2,7 @@ import streamlit as st
 import sqlite3
 import datetime
 import io
+import urllib.parse
 from PIL import Image
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -12,6 +13,14 @@ from reportlab.graphics.barcode import qr, code128
 
 # Page Configuration
 st.set_page_config(page_title="Courier Solution", page_icon="📦", layout="centered")
+
+# ----------------- WHATSAPP LINK GENERATOR FUNCTION -----------------
+def create_whatsapp_link(phone_num, msg_text):
+    clean_phone = ''.join(filter(str.isdigit, str(phone_num)))
+    if len(clean_phone) == 10:
+        clean_phone = "91" + clean_phone
+    encoded_text = urllib.parse.quote(msg_text)
+    return f"https://api.whatsapp.com/send?phone={clean_phone}&text={encoded_text}"
 
 # ----------------- ડેટાબેઝ સેટઅપ -----------------
 def init_db():
@@ -51,9 +60,15 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             party_name TEXT UNIQUE,
             party_address TEXT,
-            party_city TEXT
+            party_city TEXT,
+            mobile TEXT
         )
     """)
+
+    try:
+        cursor.execute("ALTER TABLE parties ADD COLUMN mobile TEXT")
+    except sqlite3.OperationalError:
+        pass
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS party_payments (
@@ -83,7 +98,7 @@ def init_db():
 
 init_db()
 
-# ----------------- 100% PERFECT A4 PORTRAIT TOP-ALIGNED HD RECEIPT PDF GENERATOR -----------------
+# ----------------- 100% PERFECT A4 PORTRAIT RECEIPT PDF GENERATOR -----------------
 def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -409,6 +424,7 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
         p_name = st.text_input("Party Name (પાર્ટીનું નામ):")
         p_addr = st.text_input("Address (સરનામું):")
         p_city = st.text_input("City / Pin Code (શહેર / પીનકોડ):")
+        p_mob = st.text_input("WhatsApp Mobile No (મોબાઈલ નંબર):")
         submit_p = st.form_submit_button("Save Party", type="primary")
 
         if submit_p:
@@ -418,7 +434,7 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
                 conn = sqlite3.connect("courier_database.db")
                 cursor = conn.cursor()
                 try:
-                    cursor.execute("INSERT INTO parties (party_name, party_address, party_city) VALUES (?, ?, ?)", (p_name.strip(), p_addr.strip(), p_city.strip()))
+                    cursor.execute("INSERT INTO parties (party_name, party_address, party_city, mobile) VALUES (?, ?, ?, ?)", (p_name.strip(), p_addr.strip(), p_city.strip(), p_mob.strip()))
                     conn.commit()
                     st.success(f"પાર્ટી '{p_name}' સફળતાપૂર્વક ઉમેરાઈ ગઈ છે!")
                 except sqlite3.IntegrityError:
@@ -429,7 +445,7 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
     st.write("### 🏢 સેવ થયેલી પાર્ટીઓની યાદી & ડિલીટ:")
     conn = sqlite3.connect("courier_database.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT id, party_name, party_address, party_city FROM parties ORDER BY party_name ASC")
+    cursor.execute("SELECT id, party_name, party_address, party_city, mobile FROM parties ORDER BY party_name ASC")
     p_rows = cursor.fetchall()
     conn.close()
     
@@ -437,7 +453,7 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
         for r in p_rows:
             col_p1, col_p2 = st.columns([4, 1])
             with col_p1:
-                st.write(f"🏢 **{r[1]}** | {r[2]} ({r[3]})")
+                st.write(f"🏢 **{r[1]}** | Mobile: {r[4]} | {r[2]} ({r[3]})")
             with col_p2:
                 if st.button("🗑️ Delete", key=f"del_party_{r[0]}"):
                     conn = sqlite3.connect("courier_database.db")
@@ -475,6 +491,8 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
         with col4: pcs = st.text_input("Pieces (Pcs):", "1", key="c_pcs")
         with col5: amount = st.text_input("Total Amount (RS):", key="c_amt")
 
+        c_whatsapp_num = st.text_input("Customer WhatsApp Mobile No (મોબાઈલ નંબર):", key="c_wa_num")
+
         if st.button("💾 Save & Generate Cash Receipt", type="primary"):
             if not cons_no or not sender_name or not rec_name or not amount:
                 st.error("મહેરબાની કરીને Consignment No, Sender Name, Recipient Name અને Amount ભરો!")
@@ -491,14 +509,14 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                     
                     pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Cash')
                     
-                    try:
-                        from pdf2image import convert_from_bytes
-                        images = convert_from_bytes(pdf_bytes)
-                        st.image(images[0], caption=f"HD Portrait Receipt - {cons_no}", use_container_width=True)
-                    except:
-                        st.info("💡 PDF રસીદ સફળતાપૂર્વક બની ગઈ છે.")
-
                     st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
+
+                    # 📲 WHATSAPP BUTTON
+                    if c_whatsapp_num.strip():
+                        wa_msg = f"📦 *COURIER SOLUTION RECEIPT*\n\nHello {sender_name},\nYour courier booking is confirmed!\n\n*Consignment No:* {cons_no}\n*Date:* {date_entry}\n*Courier:* {courier_co}\n*To:* {rec_name} ({dest})\n*Weight:* {weight} Kg ({pcs} Pcs)\n*Amount Paid:* RS {amount}/-\n\nThank you for choosing Courier Solution!"
+                        wa_url = create_whatsapp_link(c_whatsapp_num.strip(), wa_msg)
+                        st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Send Receipt on WhatsApp</a>', unsafe_allow_html=True)
+
                 except sqlite3.IntegrityError:
                     st.error("આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે!")
                 conn.close()
@@ -563,18 +581,11 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                 if rec_data:
                     st.success("રસીદ સફળતાપૂર્વક મળી ગઈ છે!")
                     pdf_bytes = generate_hd_receipt_pdf(rec_data[0], rec_data[1], rec_data[2], rec_data[3], rec_data[4], rec_data[5], rec_data[6], rec_data[7], rec_data[8], rec_data[9], rec_data[10], rec_data[11], rec_data[12], rec_data[13], rec_data[14], rec_data[15])
-                    
-                    try:
-                        from pdf2image import convert_from_bytes
-                        images = convert_from_bytes(pdf_bytes)
-                        st.image(images[0], caption=f"HD Portrait Receipt - {rec_data[0]}", use_container_width=True)
-                    except:
-                        pass
                     st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{rec_data[0]}.pdf", mime="application/pdf")
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
-# ----------------- ૩. CREDIT ACCOUNT BOOKING (WITH NEW HISTORY & EDIT/DELETE TAB) -----------------
+# ----------------- ૩. CREDIT ACCOUNT BOOKING -----------------
 elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)":
     tab_cr1, tab_cr2, tab_cr3 = st.tabs(["📋 Credit Booking (નવી એન્ટ્રી)", "🖨️ Re-Print Credit Receipt", "📜 Credit History & View (હિસ્ટ્રી & સુધારો)"])
 
@@ -583,7 +594,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
         
         conn = sqlite3.connect("courier_database.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT party_name, party_address, party_city FROM parties ORDER BY party_name ASC")
+        cursor.execute("SELECT party_name, party_address, party_city, mobile FROM parties ORDER BY party_name ASC")
         parties_data = cursor.fetchall()
         conn.close()
 
@@ -594,10 +605,10 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
         else:
             selected_party = st.selectbox("Select Party Name (પાર્ટી સિલેક્ટ કરો):", party_names)
             
-            def_addr, def_city = "", ""
+            def_addr, def_city, def_mob = "", "", ""
             for p in parties_data:
                 if p[0] == selected_party:
-                    def_addr, def_city = p[1], p[2]
+                    def_addr, def_city, def_mob = p[1], p[2], p[3] if len(p) > 3 else ""
                     break
 
             col1, col2 = st.columns(2)
@@ -619,6 +630,8 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
             with col3: weight = st.text_input("Weight (Kg):", "1.0", key="cr_wt")
             with col4: pcs = st.text_input("Pieces (Pcs):", "1", key="cr_pcs")
             with col5: amount = st.text_input("Amount (RS):", key="cr_amt")
+
+            cr_wa_mob = st.text_input("Party WhatsApp Mobile No:", value=def_mob if def_mob else "", key="cr_wa_mob")
 
             btn_col1, btn_col2 = st.columns(2)
             with btn_col1:
@@ -642,14 +655,14 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
 
                         if save_print:
                             pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, selected_party, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Credit Account')
-                            
-                            try:
-                                from pdf2image import convert_from_bytes
-                                images = convert_from_bytes(pdf_bytes)
-                                st.image(images[0], caption=f"Credit Receipt - {cons_no}", use_container_width=True)
-                            except:
-                                pass
                             st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
+
+                        # 📲 WHATSAPP BUTTON FOR CREDIT BOOKING
+                        if cr_wa_mob.strip():
+                            wa_msg = f"📦 *COURIER BOOKING CONFIRMATION*\n\nParty Name: *{selected_party}*\n*Consignment No:* {cons_no}\n*Date:* {date_entry}\n*Destination:* {dest}\n*Recipient:* {rec_name}\n*Weight:* {weight} Kg ({pcs} Pcs)\n*Amount:* RS {amount}/-\n\nThank you for business with Courier Solution!"
+                            wa_url = create_whatsapp_link(cr_wa_mob.strip(), wa_msg)
+                            st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Send Confirmation on WhatsApp</a>', unsafe_allow_html=True)
+
                     except sqlite3.IntegrityError:
                         st.error("આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે!")
                     conn.close()
@@ -670,18 +683,10 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 if rec_data:
                     st.success("રસીદ સફળતાપૂર્વક મળી ગઈ છે!")
                     pdf_bytes = generate_hd_receipt_pdf(rec_data[0], rec_data[1], rec_data[2], rec_data[3], rec_data[4], rec_data[5], rec_data[6], rec_data[7], rec_data[8], rec_data[9], rec_data[10], rec_data[11], rec_data[12], rec_data[13], rec_data[14], rec_data[15])
-                    
-                    try:
-                        from pdf2image import convert_from_bytes
-                        images = convert_from_bytes(pdf_bytes)
-                        st.image(images[0], caption=f"Receipt - {search_cr_cons}", use_container_width=True)
-                    except:
-                        pass
                     st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{search_cr_cons}.pdf", mime="application/pdf")
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
-    # ----------------- નવું ઉમેરેલું ત્રીજું ટેબ: CREDIT HISTORY & VIEW -----------------
     with tab_cr3:
         st.subheader("📜 View Credit Account Bookings & Edit/Delete")
         st.info(f"📅 ફિલ્ટર તારીખ: **{start_str}** થી **{end_str}**")
@@ -737,7 +742,6 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                         st.write(f"**Courier:** {r[9]} | **Mode:** {r[10]}")
                         st.write(f"**Weight:** {r[6]} Kg | **Pieces:** {r[16]}")
                     with col_e2:
-                        # Direct Print PDF Button
                         pdf_b = generate_hd_receipt_pdf(cons, r_date, r[9], r[10], r[11], destination, party, r[12], r[13], recip, r[14], r[15], r[6], r[16], amt, 'Credit Account')
                         st.download_button("🖨️ Download Receipt PDF", data=pdf_b, file_name=f"Receipt_{cons}.pdf", mime="application/pdf", key=f"dl_pdf_{rec_id}")
 
@@ -766,7 +770,6 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                             st.success(f"Consignment {cons} સફળતાપૂર્વક અપડેટ થઈ ગયું છે!")
                             st.rerun()
 
-                    # Delete Button
                     if st.button(f"🗑️ Delete Entry ({cons})", key=f"del_cr_{rec_id}", type="secondary"):
                         conn = sqlite3.connect("courier_database.db")
                         cursor = conn.cursor()
@@ -780,14 +783,16 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
 
 # ----------------- ૪. DIGITAL MONTHLY BILLING -----------------
 elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
-    st.subheader("📊 Party Digital PDF Invoice Generator, History & Delete")
+    st.subheader("📊 Party Digital PDF Invoice Generator & WhatsApp Share")
     st.info(f"📅 પસંદ કરેલ બિલિંગ સમયગાળો: **{start_str}** થી **{end_str}**")
 
     conn = sqlite3.connect("courier_database.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT party_name FROM parties ORDER BY party_name ASC")
-    p_list = [r[0] for r in cursor.fetchall()]
+    cursor.execute("SELECT party_name, mobile FROM parties ORDER BY party_name ASC")
+    p_data = cursor.fetchall()
     conn.close()
+
+    p_list = [r[0] for r in p_data]
 
     if not p_list:
         st.warning("કોઈ પાર્ટી ઉમેરેલી નથી.")
@@ -795,12 +800,19 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
         select_options = ["🌐 All Parties (બધી પાર્ટીઓ માટે એકસાથે)"] + p_list
         sel_party = st.selectbox("Select Party for Bill (બિલ બનાવવાની પાર્ટી પસંદ કરો):", select_options)
         
+        party_mob = ""
+        for p in p_data:
+            if p[0] == sel_party:
+                party_mob = p[1] if p[1] else ""
+                break
+
+        if sel_party != "🌐 All Parties (બધી પાર્ટીઓ માટે એકસાથે)":
+            bill_party_mob = st.text_input("Party WhatsApp Mobile No (મોબાઈલ નંબર):", value=party_mob, key="b_mob_input")
+
         if sel_party == "🌐 All Parties (બધી પાર્ટીઓ માટે એકસાથે)":
-            st.info("💡 તમે 'All Parties' પસંદ કર્યું છે. નીચેનું બટન દબાવવાથી તમામ પાર્ટીઓના બાકી રહેલા ક્રેડિટ બિલ એકસાથે જનરેટ થઈ જશે.")
             if st.button("🚀 Generate All Parties Bills (બધી પાર્ટીના બિલ બનાવો)", type="primary"):
                 conn = sqlite3.connect("courier_database.db")
                 cursor = conn.cursor()
-                
                 success_count = 0
                 for party in p_list:
                     cursor.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE sender_name=? AND booking_type='Credit Account' AND (bill_no IS NULL OR bill_no='') ORDER BY id DESC", (party,))
@@ -808,35 +820,26 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
 
                     filtered_bill = []
                     tot_bill = 0
-
                     for r in b_rows:
-                        rec_date_str = r[2]
                         try:
-                            rec_dt = datetime.datetime.strptime(rec_date_str, "%d/%m/%Y").date()
-                            if start_date <= rec_dt <= end_date:
+                            if start_date <= datetime.datetime.strptime(r[2], "%d/%m/%Y").date() <= end_date:
                                 filtered_bill.append(r)
                                 tot_bill += float(r[7])
-                        except:
-                            pass
+                        except: pass
 
                     if filtered_bill:
                         cursor.execute("SELECT COUNT(*) FROM bills")
                         b_count = cursor.fetchone()[0] + 1
                         generated_bill_no = f"BILL-2026-{b_count:03d}"
-
                         cursor.execute("INSERT INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (?, ?, ?, ?, ?)",
                                       (generated_bill_no, party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
                         for item in filtered_bill:
                             cursor.execute("UPDATE receipts SET bill_no=? WHERE id=?", (generated_bill_no, item[0]))
                         conn.commit()
                         success_count += 1
-
                 conn.close()
-                if success_count > 0:
-                    st.success(f"✅ કુલ {success_count} પાર્ટીઓ માટે નવા બિલ સફળતાપૂર્વક જનરેટ થઈ ગયા છે!")
-                    st.rerun()
-                else:
-                    st.warning("આ સમયગાળામાં કોઈપણ પાર્ટી માટે કોઈ નવી અનબિલ એન્ટ્રી મળી નથી.")
+                st.success(f"✅ કુલ {success_count} પાર્ટીઓ માટે નવા બિલ સફળતાપૂર્વક જનરેટ થઈ ગયા છે!")
+                st.rerun()
         else:
             conn = sqlite3.connect("courier_database.db")
             cursor = conn.cursor()
@@ -848,20 +851,12 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
                 st.warning(f"⚠️ આ પાર્ટી ('{sel_party}') માટે આ સમયગાળાનું બિલ પહેલેથી જ જનરેટ થઈ ગયેલ છે!")
                 st.info(f"બિલ નંબર: **{existing_bill[0]}** | તારીખ: {existing_bill[1]} | કુલ રકમ: RS {existing_bill[2]}/-")
                 
-                if st.button("📥 Download Existing PDF Invoice", type="primary"):
-                    conn = sqlite3.connect("courier_database.db")
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE bill_no=?", (existing_bill[0],))
-                    b_rows = cursor.fetchall()
-                    conn.close()
-                    if b_rows:
-                        pdf_bytes = generate_pdf_invoice(existing_bill[0], sel_party, start_str, end_str, existing_bill[1], b_rows, float(existing_bill[2]))
-                        st.download_button(
-                            label="📄 Download PDF Invoice",
-                            data=pdf_bytes,
-                            file_name=f"Invoice_{existing_bill[0]}_{sel_party}.pdf",
-                            mime="application/pdf"
-                        )
+                # 📲 WHATSAPP BILL SHARE
+                if bill_party_mob.strip():
+                    wa_bill_msg = f"🧾 *COURIER SOLUTION TAX INVOICE*\n\nTo: *{sel_party}*\n*Invoice No:* {existing_bill[0]}\n*Period:* {start_str} to {end_str}\n*Total Bill Amount:* RS {existing_bill[2]}/-\n\n*Pay via Google Pay/UPI:* 7043721851@yapl\n\nThank you for business with Courier Solution!"
+                    wa_bill_url = create_whatsapp_link(bill_party_mob.strip(), wa_bill_msg)
+                    st.markdown(f'<a href="{wa_bill_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-bottom:15px;">📲 Share Bill Details on WhatsApp</a>', unsafe_allow_html=True)
+
             else:
                 conn_temp = sqlite3.connect("courier_database.db")
                 cur_temp = conn_temp.cursor()
@@ -869,8 +864,6 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
                 b_count = cur_temp.fetchone()[0] + 1
                 conn_temp.close()
                 generated_bill_no = f"BILL-2026-{b_count:03d}"
-
-                st.text_input("Generated Bill No (ઓટો બિલ નંબર):", value=generated_bill_no, disabled=True)
 
                 if st.button("📄 Generate & Create Digital PDF Invoice", type="primary"):
                     conn = sqlite3.connect("courier_database.db")
@@ -880,184 +873,84 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
 
                     filtered_bill = []
                     tot_bill = 0
-
                     for r in b_rows:
-                        rec_date_str = r[2]
                         try:
-                            rec_dt = datetime.datetime.strptime(rec_date_str, "%d/%m/%Y").date()
-                            if start_date <= rec_dt <= end_date:
+                            if start_date <= datetime.datetime.strptime(r[2], "%d/%m/%Y").date() <= end_date:
                                 filtered_bill.append(r)
                                 tot_bill += float(r[7])
-                        except:
-                            pass
+                        except: pass
 
                     if filtered_bill:
-                        try:
-                            cursor.execute("INSERT INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (?, ?, ?, ?, ?)",
-                                          (generated_bill_no, sel_party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
-                            for item in filtered_bill:
-                                cursor.execute("UPDATE receipts SET bill_no=? WHERE id=?", (generated_bill_no, item[0]))
-                            conn.commit()
-                        except Exception as e:
-                            st.error(f"Error: {e}")
+                        cursor.execute("INSERT INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (?, ?, ?, ?, ?)",
+                                      (generated_bill_no, sel_party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
+                        for item in filtered_bill:
+                            cursor.execute("UPDATE receipts SET bill_no=? WHERE id=?", (generated_bill_no, item[0]))
+                        conn.commit()
                         conn.close()
 
                         pdf_bytes = generate_pdf_invoice(generated_bill_no, sel_party, start_str, end_str, today.strftime("%d/%m/%Y"), filtered_bill, tot_bill)
-
                         st.success(f"✅ પાર્ટી '{sel_party}' નું બિલ સફળતાપૂર્વક જનરેટ થઈ ગયું છે!")
                         
-                        st.download_button(
-                            label="📄 Download Digital Invoice PDF (પીડીએફ ડાઉનલોડ કરો)",
-                            data=pdf_bytes,
-                            file_name=f"Invoice_{generated_bill_no}_{sel_party}.pdf",
-                            mime="application/pdf"
-                        )
+                        st.download_button(label="📄 Download Digital Invoice PDF", data=pdf_bytes, file_name=f"Invoice_{generated_bill_no}_{sel_party}.pdf", mime="application/pdf")
 
-                        table_data = []
-                        for idx, r in enumerate(filtered_bill, 1):
-                            table_data.append({
-                                "Sr No": idx,
-                                "Consignment No": r[1],
-                                "Date": r[2],
-                                "Courier Co": r[3],
-                                "Destination": r[4],
-                                "Recipient": r[5],
-                                "Weight (Kg)": r[6],
-                                "Amount (RS)": f"₹ {float(r[7]):,.2f}"
-                            })
-                        
-                        st.table(table_data)
-                        st.metric("Total Payable Bill Amount", f"RS {tot_bill:,.2f}/-")
+                        # 📲 WHATSAPP BILL SHARE
+                        if bill_party_mob.strip():
+                            wa_bill_msg = f"🧾 *COURIER SOLUTION TAX INVOICE*\n\nTo: *{sel_party}*\n*Invoice No:* {generated_bill_no}\n*Period:* {start_str} to {end_str}\n*Total Bill Amount:* RS {tot_bill:,.2f}/-\n\n*Pay via Google Pay/UPI:* 7043721851@yapl\n\nThank you for business with Courier Solution!"
+                            wa_bill_url = create_whatsapp_link(bill_party_mob.strip(), wa_bill_msg)
+                            st.markdown(f'<a href="{wa_bill_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Share Bill Details on WhatsApp</a>', unsafe_allow_html=True)
                     else:
                         conn.close()
-                        st.info(f"પાર્ટી '{sel_party}' માટે આ સમયગાળામાં કોઈ નવું અનબિલ થયેલ ક્રેડિટ બુકિંગ મળેલ નથી.")
-
-    st.markdown("---")
-    st.subheader("📜 Generated Bills History & Delete (બિલ હિસ્ટ્રી અને ડિલીટ ઓપ્શન)")
-    conn = sqlite3.connect("courier_database.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, bill_no, party_name, bill_date, period, total_amount FROM bills ORDER BY id DESC")
-    all_bills = cursor.fetchall()
-    conn.close()
-
-    if all_bills:
-        for b in all_bills:
-            col_b1, col_b2 = st.columns([4, 1])
-            with col_b1:
-                st.write(f"📄 **Bill No: {b[1]}** | Party: {b[2]} | Date: {b[3]} | Period: {b[4]} | **Amount: RS {b[5]}/-**")
-            with col_b2:
-                if st.button("🗑️ Delete Bill", key=f"del_bill_{b[0]}"):
-                    conn = sqlite3.connect("courier_database.db")
-                    cursor = conn.cursor()
-                    cursor.execute("UPDATE receipts SET bill_no=NULL WHERE bill_no=?", (b[1],))
-                    cursor.execute("DELETE FROM bills WHERE id=?", (b[0],))
-                    conn.commit()
-                    conn.close()
-                    st.success(f"બિલ નંબર {b[1]} સફળતાપૂર્વક ડિલીટ થઈ ગયું છે!")
-                    st.rerun()
-    else:
-        st.info("હજુ સુધી કોઈ બિલ જનરેટ થયેલ નથી.")
+                        st.info("કોઈ અનબિલ એન્ટ્રી મળી નથી.")
 
 # ----------------- ૫. PARTY PAYMENT RECEIVE -----------------
 elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & રસીદ)":
-    st.subheader("💳 Party Payment Receive & Receipt Generator")
+    st.subheader("💳 Party Payment Receive & WhatsApp Receipt")
     
     conn = sqlite3.connect("courier_database.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT party_name FROM parties ORDER BY party_name ASC")
-    p_list = [r[0] for r in cursor.fetchall()]
+    cursor.execute("SELECT party_name, mobile FROM parties ORDER BY party_name ASC")
+    p_data = cursor.fetchall()
+    p_list = [r[0] for r in p_data]
     
     cursor.execute("SELECT bill_no, party_name, total_amount FROM bills ORDER BY id DESC")
     b_list = cursor.fetchall()
-    
-    unpaid_b_list = []
-    for b in b_list:
-        b_no = b[0]
-        try: b_tot = float(b[2])
-        except: b_tot = 0.0
-            
-        cursor.execute("SELECT SUM(CAST(amount AS FLOAT)) FROM party_payments WHERE bill_no=?", (b_no,))
-        sum_paid = cursor.fetchone()[0]
-        sum_paid = float(sum_paid) if sum_paid else 0.0
-        
-        if sum_paid < b_tot:
-            unpaid_b_list.append(b)
-
     conn.close()
 
-    bill_options = ["-- Select Bill No (બિલ નં પસંદ કરો) --"] + [f"{b[0]} | {b[1]} | RS {b[2]}/-" for b in unpaid_b_list]
+    bill_options = ["-- Select Bill No (બિલ નં પસંદ કરો) --"] + [f"{b[0]} | {b[1]} | RS {b[2]}/-" for b in b_list]
 
     if not p_list:
         st.warning("⚠️ પહેલા મેનુમાંથી 'Add Account Party' પસંદ કરીને પાર્ટી ઉમેરો!")
     else:
         with st.form("payment_form", clear_on_submit=False):
-            selected_bill_opt = st.selectbox("Select Pending Bill No (જે બિલનું પેમેન્ટ બાકી હોય તે પસંદ કરો):", bill_options)
-            pay_party = st.selectbox("Select Party Name (પાર્ટીનું નામ):", p_list)
-            pay_date = st.text_input("Payment Date (તારીખ):", value=today.strftime("%d/%m/%Y"))
-            pay_amount = st.text_input("Payment Amount (જમા થયેલ રકમ RS):")
-            pay_mode = st.selectbox("Payment Mode (પેમેન્ટ મોડ):", ["Cash (રોકડ)", "UPI (ગૂગલપે/ફોનપે)", "Cheque (ચેક)"])
-            pay_note = st.text_input("Note / Cheque No / Reference (નોંધ):")
+            selected_bill_opt = st.selectbox("Select Pending Bill No:", bill_options)
+            pay_party = st.selectbox("Select Party Name:", p_list)
+            pay_date = st.text_input("Payment Date:", value=today.strftime("%d/%m/%Y"))
+            pay_amount = st.text_input("Payment Amount (RS):")
+            pay_mode = st.selectbox("Payment Mode:", ["Cash (રોકડ)", "UPI (ગૂગલપે/ફોનપે)", "Cheque (ચેક)"])
+            pay_note = st.text_input("Note / Reference:")
+            pay_mob = st.text_input("WhatsApp Mobile No:")
             
             submit_pay = st.form_submit_button("💾 Save Payment (પેમેન્ટ સેવ કરો)", type="primary")
 
         if submit_pay:
             if not pay_amount.strip():
-                st.error("મહેરબાની કરીને જમા લેવાની રકમ ભરો!")
+                st.error("મહેરબાની કરીને રકમ ભરો!")
             else:
                 target_bill_no = selected_bill_opt.split(" | ")[0] if "-- Select" not in selected_bill_opt else "DIRECT"
-                
                 conn = sqlite3.connect("courier_database.db")
                 cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO party_payments (party_name, bill_no, date, amount, pay_mode, note)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip()))
+                cursor.execute("INSERT INTO party_payments (party_name, bill_no, date, amount, pay_mode, note) VALUES (?, ?, ?, ?, ?, ?)",
+                              (pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip()))
                 rec_last_id = cursor.lastrowid
                 conn.commit()
                 conn.close()
 
-                st.success(f"✅ પાર્ટી '{pay_party}' માટે (બિલ નં: {target_bill_no}) RS {pay_amount}/- સફળતાપૂર્વક જમા થઈ ગયા છે!")
+                st.success(f"✅ પાર્ટી '{pay_party}' ના RS {pay_amount}/- જમા થઈ ગયા છે!")
 
                 pay_pdf_bytes = generate_payment_pdf_receipt(rec_last_id, pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip())
+                st.download_button(label="📄 Download Payment Receipt PDF", data=pay_pdf_bytes, file_name=f"Payment_Receipt_REC{rec_last_id:04d}_{pay_party}.pdf", mime="application/pdf")
 
-                st.download_button(
-                    label="📄 Download Payment Receipt PDF (પેમેન્ટ જમા રસીદ ડાઉનલોડ કરો)",
-                    data=pay_pdf_bytes,
-                    file_name=f"Payment_Receipt_REC{rec_last_id:04d}_{pay_party}.pdf",
-                    mime="application/pdf"
-                )
-                st.rerun()
-
-        st.markdown("---")
-        st.subheader("📜 Party Payment History & Delete (પેમેન્ટ હિસ્ટ્રી અને ડિલીટ ઓપ્શન)")
-        
-        conn = sqlite3.connect("courier_database.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, party_name, bill_no, date, amount, pay_mode, note FROM party_payments ORDER BY id DESC")
-        pay_rows = cursor.fetchall()
-        conn.close()
-
-        if pay_rows:
-            tot_received = 0
-            for r in pay_rows:
-                col_py1, col_py2, col_py3 = st.columns([3, 1.2, 1])
-                with col_py1:
-                    st.write(f"🏢 **{r[1]}** | Bill: **{r[2]}** | Date: {r[3]} | **RS {r[4]}** ({r[5]})")
-                    try: tot_received += float(r[4])
-                    except: pass
-                with col_py2:
-                    hist_pdf = generate_payment_pdf_receipt(r[0], r[1], r[2], r[3], r[4], r[5], r[6])
-                    st.download_button("🖨️ Receipt PDF", data=hist_pdf, file_name=f"Payment_Receipt_{r[0]}.pdf", mime="application/pdf", key=f"pdf_pay_{r[0]}")
-                with col_py3:
-                    if st.button("🗑️ Delete Pay", key=f"del_pay_{r[0]}"):
-                        conn = sqlite3.connect("courier_database.db")
-                        cursor = conn.cursor()
-                        cursor.execute("DELETE FROM party_payments WHERE id=?", (r[0],))
-                        conn.commit()
-                        conn.close()
-                        st.success("પેમેન્ટ એન્ટ્રી સફળતાપૂર્વક ડિલીટ થઈ ગઈ છે!")
-                        st.rerun()
-            st.metric("💰 Total Payment Received", f"RS {tot_received:,.2f}/-")
-        else:
-            st.info("કોઈ પેમેન્ટ રિસીવ રેકોર્ડ મળેલ નથી.")
+                # 📲 WHATSAPP PAYMENT RECEIPT
+                if pay_mob.strip():
+                    wa_pay_msg = f"💳 *PAYMENT RECEIPT ACKNOWLEDGEMENT*\n\nReceived From: *{pay_party}*\n*Receipt No:* PAY-REC-{rec_last_id:04d}\n*Against Bill:* {target_bill_no}\n*Amount Received:* RS {pay_amount}/-\n*Payment Mode:* {pay_mode}\n*Date:* {
 
