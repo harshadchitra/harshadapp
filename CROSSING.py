@@ -2,6 +2,8 @@ import streamlit as st
 import sqlite3
 import datetime
 import io
+import urllib.request
+import os
 from PIL import Image, ImageDraw, ImageFont
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -13,12 +15,25 @@ from reportlab.graphics.barcode import qr
 # Page Configuration
 st.set_page_config(page_title="Courier Solution", page_icon="📦", layout="centered")
 
+# ----------------- HD BOLD FONT DOWNLOADER -----------------
+@st.cache_resource
+def get_clean_bold_font():
+    font_path = "Roboto-Bold.ttf"
+    if not os.path.exists(font_path):
+        try:
+            url = "https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Bold.ttf"
+            urllib.request.urlretrieve(url, font_path)
+        except:
+            pass
+    return font_path
+
+font_file = get_clean_bold_font()
+
 # ----------------- ડેટાબેઝ સેટઅપ -----------------
 def init_db():
     conn = sqlite3.connect("courier_database.db")
     cursor = conn.cursor()
     
-    # રસીપ્ટ ટેબલ
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS receipts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,7 +62,6 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
-    # પાર્ટી માસ્ટર ટેબલ
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS parties (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +71,6 @@ def init_db():
         )
     """)
 
-    # પાર્ટી પેમેન્ટ રિસીવ ટેબલ
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS party_payments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,7 +83,6 @@ def init_db():
         )
     """)
 
-    # મંથલી બિલ રેકોર્ડ ટેબલ
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS bills (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,7 +99,7 @@ def init_db():
 
 init_db()
 
-# ----------------- BILL PDF INVOICE GENERATOR WITH UPDATED UPI -----------------
+# ----------------- BILL PDF INVOICE GENERATOR WITH UPI -----------------
 def generate_pdf_invoice(bill_no, party_name, start_str, end_str, bill_date, items, total_amount):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -163,7 +175,7 @@ def generate_pdf_invoice(bill_no, party_name, start_str, end_str, bill_date, ite
     story.append(t_total)
     story.append(Spacer(1, 15))
 
-    # --- UPDATED UPI ID: 7043721851@yapl ---
+    # --- UPI ID: 7043721851@yapl ---
     upi_id = "7043721851@yapl"
     qr_code_widget = qr.QrCodeWidget(f"upi://pay?pa={upi_id}&pn=Courier%20Solution&am={total_amount}&cu=INR")
     bounds = qr_code_widget.getBounds()
@@ -248,110 +260,100 @@ def generate_payment_pdf_receipt(rec_id, party_name, bill_no, pay_date, pay_amou
     buffer.seek(0)
     return buffer.getvalue()
 
-# ----------------- ડીઝીટલ બારકોડ ડ્રોઈંગ ફંકશન -----------------
-def draw_barcode(draw, x_start, y_start, text_val, width=420, height=65):
+# ----------------- BARCODE DRAWING -----------------
+def draw_barcode(draw, x_start, y_start, text_val, width=400, height=60):
     import random
     random.seed(sum(ord(c) for c in text_val))
     curr_x = x_start
     end_x = x_start + width
     while curr_x < end_x:
-        line_w = random.choice([3, 4, 5, 6])
-        gap = random.choice([2, 3, 4])
+        line_w = random.choice([3, 4, 5])
+        gap = random.choice([2, 3])
         draw.rectangle([curr_x, y_start, curr_x + line_w, y_start + height], fill="black")
         curr_x += line_w + gap
 
-# ----------------- 100% RELIABLE LARGE FONT RECEIPT GENERATOR -----------------
+# ----------------- CLEAN & HIGH DEFINITION RECEIPT GENERATOR -----------------
 def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type):
     width, height = 1200, 850
     img = Image.new("RGB", (width, height), "white")
     draw = ImageDraw.Draw(img)
 
-    # સર્વર પર પિલો ફાઇલો કે લોકલ ટાઇપનો આધાર લીધા વગર ગેરંટી સાથે મોટો બોલ્ડ અક્ષર ડ્રો કરવાનું ફંકશન
-    def draw_large_text(x, y, text, size=30, color="black", is_bold=True):
+    # TRUE TTF VECTOR FONT HELPERS (NO BLACK BLOTS)
+    def font(sz):
         try:
-            # સિસ્ટમ લિનક્સ / વિન્ડોઝ ફ્રીટાઇપ ફોન્ટ ટ્રાય કરો
-            font = ImageFont.truetype("DejaVuSans-Bold.ttf" if is_bold else "DejaVuSans.ttf", size)
-            draw.text((x, y), text, fill=color, font=font)
+            return ImageFont.truetype(font_file, sz)
         except:
-            try:
-                font = ImageFont.truetype("arialbd.ttf" if is_bold else "arial.ttf", size)
-                draw.text((x, y), text, fill=color, font=font)
-            except:
-                # જો કોઈ ફાઈલ ન મળે તો મલ્ટી-ઓફસેટ ડ્રોઈંગથી અક્ષરોને મેક્સિમમ મોટો અને બોલ્ડ લૂક આપો
-                font = ImageFont.load_default()
-                offsets = [(-1,0),(1,0),(0,-1),(0,1),(-1,-1),(1,1),(1,-1),(-1,1),(0,0)] if is_bold else [(0,0)]
-                for ox, oy in offsets:
-                    draw.text((x + ox, y + oy), text, fill=color, font=font)
+            return ImageFont.load_default()
 
-    # 1. આઉટર બોક્સ
-    draw.rectangle([10, 10, width-10, height-10], outline="black", width=5)
+    # Outer Frame
+    draw.rectangle([10, 10, width-10, height-10], outline="black", width=4)
 
-    # 2. હેડર ભાગ (COURIER SOLUTION & BARCODE)
-    draw.rectangle([10, 10, width-10, 150], outline="black", width=4)
-    draw_large_text(25, 20, "📦 COURIER SOLUTION", size=52, color="#002147")
-    draw_large_text(25, 90, "EXPRESS CARGO & LOGISTICS SERVICES", size=24, color="#222222")
+    # Header Box
+    draw.rectangle([10, 10, width-10, 150], outline="black", width=3)
+    draw.text((25, 20), "📦 COURIER SOLUTION", fill="#002147", font=font(44))
+    draw.text((25, 88), "EXPRESS CARGO & LOGISTICS SERVICES", fill="#333333", font=font(22))
 
-    draw.line([(750, 10), (750, 150)], fill="black", width=4)
-    draw_large_text(760, 15, "Consignment Number", size=22, color="black")
-    draw_barcode(draw, 760, 48, cons_no, width=420, height=55)
-    draw_large_text(810, 108, f"{cons_no}", size=32, color="black")
+    draw.line([(760, 10), (760, 150)], fill="black", width=3)
+    draw.text((770, 15), "Consignment Number", fill="black", font=font(20))
+    draw_barcode(draw, 770, 45, cons_no, width=400, height=55)
+    draw.text((820, 106), f"{cons_no}", fill="black", font=font(30))
 
-    # 3. Origin / Destination / Date / Mode
-    draw.rectangle([10, 150, width-10, 250], outline="black", width=4)
-    draw.line([(380, 150), (380, 250)], fill="black", width=4)
-    draw.line([(750, 150), (750, 250)], fill="black", width=4)
+    # Row 2: Origin, Destination, Date
+    draw.rectangle([10, 150, width-10, 250], outline="black", width=3)
+    draw.line([(380, 150), (380, 250)], fill="black", width=3)
+    draw.line([(760, 150), (760, 250)], fill="black", width=3)
 
-    draw_large_text(20, 160, f"Origin: {origin.upper()}", size=30, color="black")
-    draw_large_text(20, 205, f"Courier: {courier_co.upper()}", size=28, color="blue")
+    draw.text((20, 160), f"Origin: {origin.upper()}", fill="black", font=font(26))
+    draw.text((20, 202), f"Courier: {courier_co.upper()}", fill="blue", font=font(26))
 
-    draw_large_text(390, 160, "Destination:", size=22, color="black")
-    draw_large_text(390, 195, f"{dest.upper()}", size=38, color="black")
+    draw.text((390, 160), "Destination:", fill="black", font=font(20))
+    draw.text((390, 192), f"{dest.upper()}", fill="black", font=font(36))
 
-    draw_large_text(760, 160, f"Date: {date}", size=28, color="black")
-    draw_large_text(760, 205, f"Booking: {booking_type} ({mode})", size=26, color="black")
+    draw.text((770, 160), f"Date: {date}", fill="black", font=font(26))
+    draw.text((770, 202), f"Booking: {booking_type} ({mode})", fill="black", font=font(24))
 
-    # 4. Consignor (FROM) & Consignee (TO)
-    draw.rectangle([10, 250, width-10, 550], outline="black", width=4)
-    draw.line([(width//2, 250), (width//2, 550)], fill="black", width=4)
+    # Row 3: Consignor & Consignee
+    draw.rectangle([10, 250, width-10, 550], outline="black", width=3)
+    draw.line([(width//2, 250), (width//2, 550)], fill="black", width=3)
 
-    # Consignor (Sender)
-    draw.rectangle([10, 250, width//2, 300], fill="#E6ECF2", outline="black", width=2)
-    draw_large_text(20, 260, "CONSIGNOR (FROM)", size=26, color="black")
-    draw_large_text(20, 315, f"{sender_name.upper()}", size=36, color="black")
-    draw_large_text(20, 380, f"Address: {sender_address}", size=28, color="black")
-    draw_large_text(20, 470, f"City/Pin: {sender_city}", size=28, color="black")
+    # Sender Box
+    draw.rectangle([10, 250, width//2, 295], fill="#E6ECF2", outline="black", width=2)
+    draw.text((20, 260), "CONSIGNOR (FROM)", fill="black", font=font(24))
+    draw.text((20, 310), f"{sender_name.upper()}", fill="black", font=font(32))
+    draw.text((20, 375), f"Address: {sender_address}", fill="black", font=font(26))
+    draw.text((20, 465), f"City/Pin: {sender_city}", fill="black", font=font(26))
 
-    # Consignee (Recipient)
-    draw.rectangle([width//2, 250, width-10, 300], fill="#E6ECF2", outline="black", width=2)
-    draw_large_text(width//2 + 10, 260, "CONSIGNEE (TO)", size=26, color="black")
-    draw_large_text(width//2 + 10, 315, f"{rec_name.upper()}", size=36, color="black")
-    draw_large_text(width//2 + 10, 380, f"Address: {rec_address}", size=28, color="black")
-    draw_large_text(width//2 + 10, 470, f"City/Pin: {rec_city}", size=28, color="black")
+    # Recipient Box
+    draw.rectangle([width//2, 250, width-10, 295], fill="#E6ECF2", outline="black", width=2)
+    draw.text((width//2 + 10, 260), "CONSIGNEE (TO)", fill="black", font=font(24))
+    draw.text((width//2 + 10, 310), f"{rec_name.upper()}", fill="black", font=font(32))
+    draw.text((width//2 + 10, 375), f"Address: {rec_address}", fill="black", font=font(26))
+    draw.text((width//2 + 10, 465), f"City/Pin: {rec_city}", fill="black", font=font(26))
 
-    # 5. Weight, Pcs, Amount
-    draw.rectangle([10, 550, width-10, 680], outline="black", width=4)
-    draw.rectangle([10, 550, width-10, 600], fill="#F0F4F8", outline="black", width=2)
+    # Row 4: Pcs, Weight, Amount
+    draw.rectangle([10, 550, width-10, 680], outline="black", width=3)
+    draw.rectangle([10, 550, width-10, 595], fill="#F0F4F8", outline="black", width=2)
 
-    draw.line([(280, 550), (280, 680)], fill="black", width=4)
-    draw.line([(560, 550), (560, 680)], fill="black", width=4)
-    draw.line([(880, 550), (880, 680)], fill="black", width=4)
+    draw.line([(280, 550), (280, 680)], fill="black", width=3)
+    draw.line([(560, 550), (560, 680)], fill="black", width=3)
+    draw.line([(880, 550), (880, 680)], fill="black", width=3)
 
-    draw_large_text(50, 560, "Pieces (Pcs)", size=26, color="black")
-    draw_large_text(330, 560, "Weight (Kg)", size=26, color="black")
-    draw_large_text(600, 560, "Total Amount (RS)", size=26, color="black")
-    draw_large_text(900, 560, "Payment Status", size=26, color="black")
+    draw.text((50, 560), "Pieces (Pcs)", fill="black", font=font(24))
+    draw.text((330, 560), "Weight (Kg)", fill="black", font=font(24))
+    draw.text((600, 560), "Total Amount (RS)", fill="black", font=font(24))
+    draw.text((900, 560), "Payment Status", fill="black", font=font(24))
 
-    draw_large_text(80, 620, f"{pcs} Pcs", size=38, color="black")
-    draw_large_text(350, 620, f"{weight} Kg", size=38, color="black")
-    draw_large_text(610, 620, f"RS {amount}/-", size=38, color="green")
-    draw_large_text(920, 620, f"{booking_type}", size=36, color="blue" if booking_type == "Cash" else "purple")
+    draw.text((80, 618), f"{pcs} Pcs", fill="black", font=font(34))
+    draw.text((350, 618), f"{weight} Kg", fill="black", font=font(34))
+    draw.text((610, 618), f"RS {amount}/-", fill="green", font=font(34))
+    draw.text((920, 618), f"{booking_type}", fill="blue" if booking_type == "Cash" else "purple", font=font(32))
 
-    # 6. Footer Remarks
-    draw_large_text(20, 700, f"Shipment Remarks: Booking Generated via Courier Solution Management System.", size=24, color="black")
-    draw_large_text(20, 750, "* Risk Charge Included in Gross Amt, if any. Subject to terms & conditions.", size=18, color="#555555", is_bold=False)
+    # Row 5: Footer
+    draw.text((20, 700), f"Shipment Remarks: Booking Generated via Courier Solution Management System.", fill="black", font=font(22))
+    draw.text((20, 750), "* Risk Charge Included in Gross Amt, if any. Subject to terms & conditions.", fill="#555555", font=font(18))
 
     draw.line([(width-380, 800), (width-30, 800)], fill="black", width=3)
-    draw_large_text(width-360, 810, "Authorized Signatory (Courier Solution)", size=22, color="black")
+    draw.text((width-360, 810), "Authorized Signatory (Courier Solution)", fill="black", font=font(20))
 
     return img
 
@@ -360,7 +362,7 @@ st.title("📦 COURIER SOLUTION")
 st.caption("Express Cargo & Logistics Management System")
 st.markdown("---")
 
-# SIDEBAR NAVIGATION & FILTER
+# SIDEBAR NAVIGATION
 st.sidebar.header("⚙️ નેવિગેશન & ફિલ્ટર")
 menu = st.sidebar.radio("મેનુ પસંદ કરો (Menu)", [
     "➕ Add Account Party (પાર્ટી ઉમેરો)",
