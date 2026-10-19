@@ -86,9 +86,6 @@ init_db()
 # ----------------- 100% PERFECT A4 PORTRAIT TOP-ALIGNED HD RECEIPT PDF GENERATOR -----------------
 def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type):
     buffer = io.BytesIO()
-    
-    # A4 Portrait Size (595.27 x 841.89 points)
-    # topMargin ને 20 રાખ્યું છે જેથી પ્રિન્ટ પેપરના બરાબર ઉપરના ભાગ (Top) થી ચાલુ થાય અને પેપર ન બગડે.
     doc = SimpleDocTemplate(
         buffer, 
         pagesize=letter, 
@@ -101,7 +98,6 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
 
     styles = getSampleStyleSheet()
 
-    # મોટા અને ઘાટા બોલ્ડ ફોન્ટ્સ
     f_header_title = ParagraphStyle('HTitle', fontName='Helvetica-Bold', fontSize=26, leading=30, textColor=colors.HexColor('#002147'))
     f_header_sub = ParagraphStyle('HSub', fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=colors.HexColor('#333333'))
     f_label_sm = ParagraphStyle('LblSm', fontName='Helvetica-Bold', fontSize=10, leading=12, textColor=colors.black)
@@ -111,8 +107,6 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     f_val_green = ParagraphStyle('ValGreen', fontName='Helvetica-Bold', fontSize=18, leading=22, textColor=colors.HexColor('#008000'))
     f_footer = ParagraphStyle('Foot', fontName='Helvetica', fontSize=9, leading=11, textColor=colors.HexColor('#444444'))
 
-    # કુલ ઉપલબ્ધ પહોળાઈ = 545 points (A4 Portrait Width 595 - Left/Right margins 50)
-    # ૧. હેડર સેક્શન & બારકોડ
     barcode_obj = code128.Code128(cons_no, barHeight=35, barWidth=1.5)
     
     header_data = [
@@ -138,7 +132,6 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
         ('PADDING', (0,0), (-1,-1), 6),
     ]))
 
-    # ૨. Origin / Destination / Date / Mode
     row2_data = [
         [
             Paragraph(f"<b>Origin:</b> <font size=13 color='#002147'>{origin.upper()}</font><br/><b>Courier:</b> <font color='blue'>{courier_co.upper()}</font>", f_val_lg),
@@ -154,7 +147,6 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
         ('PADDING', (0,0), (-1,-1), 8),
     ]))
 
-    # ૩. Consignor & Consignee
     row3_data = [
         [
             Paragraph("CONSIGNOR (FROM)", f_val_lg),
@@ -175,7 +167,6 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
         ('PADDING', (0,0), (-1,-1), 8),
     ]))
 
-    # ૪. Pcs, Weight, Amount
     row4_data = [
         [
             Paragraph("Pieces (Pcs)", f_label_sm),
@@ -199,7 +190,6 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
         ('PADDING', (0,0), (-1,-1), 8),
     ]))
 
-    # ૫. Footer
     foot_data = [
         [
             Paragraph("<b>Shipment Remarks:</b> Booking Generated via Courier Solution Management System.<br/><i>* Risk Charge Included in Gross Amt, if any. Subject to terms & conditions.</i>", f_footer),
@@ -302,7 +292,6 @@ def generate_pdf_invoice(bill_no, party_name, start_str, end_str, bill_date, ite
     story.append(t_total)
     story.append(Spacer(1, 15))
 
-    # --- UPI ID: 7043721851@yapl ---
     upi_id = "7043721851@yapl"
     qr_code_widget = qr.QrCodeWidget(f"upi://pay?pa={upi_id}&pn=Courier%20Solution&am={total_amount}&cu=INR")
     bounds = qr_code_widget.getBounds()
@@ -585,9 +574,9 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
-# ----------------- ૩. CREDIT ACCOUNT BOOKING -----------------
+# ----------------- ૩. CREDIT ACCOUNT BOOKING (WITH NEW HISTORY & EDIT/DELETE TAB) -----------------
 elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)":
-    tab_cr1, tab_cr2 = st.tabs(["📋 Credit Booking (નવી એન્ટ્રી)", "🖨️ Re-Print Credit Receipt (ફરીવાર પ્રિન્ટ)"])
+    tab_cr1, tab_cr2, tab_cr3 = st.tabs(["📋 Credit Booking (નવી એન્ટ્રી)", "🖨️ Re-Print Credit Receipt", "📜 Credit History & View (હિસ્ટ્રી & સુધારો)"])
 
     with tab_cr1:
         st.subheader("Credit Account Courier Booking")
@@ -685,12 +674,109 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                     try:
                         from pdf2image import convert_from_bytes
                         images = convert_from_bytes(pdf_bytes)
-                        st.image(images[0], caption=f"Receipt - {cons_no}", use_container_width=True)
+                        st.image(images[0], caption=f"Receipt - {search_cr_cons}", use_container_width=True)
                     except:
                         pass
-                    st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
+                    st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{search_cr_cons}.pdf", mime="application/pdf")
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
+
+    # ----------------- નવું ઉમેરેલું ત્રીજું ટેબ: CREDIT HISTORY & VIEW -----------------
+    with tab_cr3:
+        st.subheader("📜 View Credit Account Bookings & Edit/Delete")
+        st.info(f"📅 ફિલ્ટર તારીખ: **{start_str}** થી **{end_str}**")
+
+        conn = sqlite3.connect("courier_database.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT party_name FROM parties ORDER BY party_name ASC")
+        p_filter_list = ["🌐 All Parties (બધી પાર્ટી)"] + [r[0] for r in cursor.fetchall()]
+        
+        sel_filter_party = st.selectbox("Filter by Party (પાર્ટી વાઈઝ ફિલ્ટર કરો):", p_filter_list, key="f_party_hist")
+
+        if sel_filter_party == "🌐 All Parties (બધી પાર્ટી)":
+            cursor.execute("SELECT id, cons_no, date, sender_name, rec_name, dest, weight, amount, bill_no, courier_co, mode, origin, sender_address, sender_city, rec_address, rec_city, pcs FROM receipts WHERE booking_type='Credit Account' ORDER BY id DESC")
+        else:
+            cursor.execute("SELECT id, cons_no, date, sender_name, rec_name, dest, weight, amount, bill_no, courier_co, mode, origin, sender_address, sender_city, rec_address, rec_city, pcs FROM receipts WHERE booking_type='Credit Account' AND sender_name=? ORDER BY id DESC", (sel_filter_party,))
+        
+        cr_all_rows = cursor.fetchall()
+        conn.close()
+
+        filtered_cr = []
+        tot_cr_amt = 0.0
+
+        for r in cr_all_rows:
+            rec_date_str = r[2]
+            try:
+                rec_dt = datetime.datetime.strptime(rec_date_str, "%d/%m/%Y").date()
+                if start_date <= rec_dt <= end_date:
+                    filtered_cr.append(r)
+                    tot_cr_amt += float(r[7])
+            except:
+                filtered_cr.append(r)
+                try: tot_cr_amt += float(r[7])
+                except: pass
+
+        st.metric("📊 Total Selected Credit Amount", f"RS {tot_cr_amt:,.2f}/-", f"Total Entries: {len(filtered_cr)}")
+        st.markdown("---")
+
+        if filtered_cr:
+            for r in filtered_cr:
+                rec_id = r[0]
+                cons = r[1]
+                r_date = r[2]
+                party = r[3]
+                recip = r[4]
+                destination = r[5]
+                amt = r[7]
+                b_status = f" (Bill: {r[8]})" if r[8] else " (Unbilled)"
+
+                with st.expander(f"🧾 Cons: {cons} | Party: {party} | Date: {r_date} | RS {amt}/-{b_status}"):
+                    col_e1, col_e2 = st.columns(2)
+                    with col_e1:
+                        st.write(f"**Recipient:** {recip} ({destination})")
+                        st.write(f"**Courier:** {r[9]} | **Mode:** {r[10]}")
+                        st.write(f"**Weight:** {r[6]} Kg | **Pieces:** {r[16]}")
+                    with col_e2:
+                        # Direct Print PDF Button
+                        pdf_b = generate_hd_receipt_pdf(cons, r_date, r[9], r[10], r[11], destination, party, r[12], r[13], recip, r[14], r[15], r[6], r[16], amt, 'Credit Account')
+                        st.download_button("🖨️ Download Receipt PDF", data=pdf_b, file_name=f"Receipt_{cons}.pdf", mime="application/pdf", key=f"dl_pdf_{rec_id}")
+
+                    st.markdown("#### ✏️ Edit Entry (એન્ટ્રીમાં સુધારો કરો):")
+                    with st.form(f"edit_form_{rec_id}"):
+                        edit_col1, edit_col2 = st.columns(2)
+                        with edit_col1:
+                            e_rec_name = st.text_input("Recipient Name:", value=recip)
+                            e_dest = st.text_input("Destination:", value=destination)
+                        with edit_col2:
+                            e_wt = st.text_input("Weight (Kg):", value=r[6])
+                            e_amt = st.text_input("Amount (RS):", value=amt)
+                        
+                        btn_update = st.form_submit_button("💾 Save Changes (સુધારો સેવ કરો)")
+
+                        if btn_update:
+                            conn = sqlite3.connect("courier_database.db")
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                UPDATE receipts 
+                                SET rec_name=?, dest=?, weight=?, amount=?
+                                WHERE id=?
+                            """, (e_rec_name.strip(), e_dest.strip(), e_wt.strip(), e_amt.strip(), rec_id))
+                            conn.commit()
+                            conn.close()
+                            st.success(f"Consignment {cons} સફળતાપૂર્વક અપડેટ થઈ ગયું છે!")
+                            st.rerun()
+
+                    # Delete Button
+                    if st.button(f"🗑️ Delete Entry ({cons})", key=f"del_cr_{rec_id}", type="secondary"):
+                        conn = sqlite3.connect("courier_database.db")
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM receipts WHERE id=?", (rec_id,))
+                        conn.commit()
+                        conn.close()
+                        st.success(f"Consignment {cons} સફળતાપૂર્વક ડિલીટ થઈ ગયું છે!")
+                        st.rerun()
+        else:
+            st.warning("પસંદ કરેલી પાર્ટી અથવા તારીખ ગાળામાં કોઈ ક્રેડિટ બુકિંગ મળેલ નથી.")
 
 # ----------------- ૪. DIGITAL MONTHLY BILLING -----------------
 elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
