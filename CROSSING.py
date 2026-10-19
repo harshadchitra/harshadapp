@@ -92,23 +92,25 @@ def generate_pdf_invoice(bill_no, party_name, start_str, end_str, bill_date, ite
     story = []
     styles = getSampleStyleSheet()
 
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=22, textColor=colors.HexColor('#002147'), alignment=1, spaceAfter=2)
+    logo_style = ParagraphStyle('LogoStyle', parent=styles['Heading1'], fontSize=28, textColor=colors.HexColor('#002147'), alignment=1, spaceAfter=2)
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=20, textColor=colors.HexColor('#002147'), alignment=1, spaceAfter=2)
     sub_title_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#555555'), alignment=1, spaceAfter=15)
-    invoice_head_style = ParagraphStyle('InvHead', parent=styles['Heading2'], fontSize=14, textColor=colors.HexColor('#d9534f'), alignment=1, spaceAfter=15)
-    normal_style = ParagraphStyle('NormalStyle', parent=styles['Normal'], fontSize=10, textColor=colors.black, leading=14)
-    bold_style = ParagraphStyle('BoldStyle', parent=styles['Normal'], fontSize=10, textColor=colors.black, fontName='Helvetica-Bold', leading=14)
+    invoice_head_style = ParagraphStyle('InvHead', parent=styles['Heading2'], fontSize=13, textColor=colors.HexColor('#d9534f'), alignment=1, spaceAfter=15)
+    normal_style = ParagraphStyle('NormalStyle', parent=styles['Normal'], fontSize=9, textColor=colors.black, leading=13)
+    bold_style = ParagraphStyle('BoldStyle', parent=styles['Normal'], fontSize=9, textColor=colors.black, fontName='Helvetica-Bold', leading=13)
 
+    story.append(Paragraph("📦", logo_style))
     story.append(Paragraph("COURIER SOLUTION", title_style))
     story.append(Paragraph("Express Cargo & Logistics Services", sub_title_style))
     story.append(Paragraph("TAX INVOICE / MONTHLY BILL", invoice_head_style))
 
     details_data = [
         [
-            Paragraph(f"<b>Invoice To:</b><br/><font size=12 color='#002147'><b>{party_name}</b></font><br/>Billing Period: {start_str} to {end_str}", normal_style),
+            Paragraph(f"<b>Invoice To:</b><br/><font size=11 color='#002147'><b>{party_name}</b></font><br/>Billing Period: {start_str} to {end_str}", normal_style),
             Paragraph(f"<b>Invoice No:</b> <font color='red'><b>{bill_no}</b></font><br/><b>Date:</b> {bill_date}<br/><b>Status:</b> UNPAID", normal_style)
         ]
     ]
-    t_details = Table(details_data, colWidths=[300, 240])
+    t_details = Table(details_data, colWidths=[310, 230])
     t_details.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8f9fa')),
         ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#002147')),
@@ -118,7 +120,7 @@ def generate_pdf_invoice(bill_no, party_name, start_str, end_str, bill_date, ite
     story.append(t_details)
     story.append(Spacer(1, 15))
 
-    headers = [Paragraph('<b>Sr</b>', bold_style), Paragraph('<b>Consignment No</b>', bold_style), Paragraph('<b>Date</b>', bold_style), Paragraph('<b>Destination</b>', bold_style), Paragraph('<b>Recipient</b>', bold_style), Paragraph('<b>Wt(kg)</b>', bold_style), Paragraph('<b>Amount(RS)</b>', bold_style)]
+    headers = [Paragraph('<b>Sr</b>', bold_style), Paragraph('<b>Consignment No</b>', bold_style), Paragraph('<b>Date</b>', bold_style), Paragraph('<b>Courier Co</b>', bold_style), Paragraph('<b>Destination</b>', bold_style), Paragraph('<b>Recipient</b>', bold_style), Paragraph('<b>Wt(kg)</b>', bold_style), Paragraph('<b>Amount(RS)</b>', bold_style)]
     data = [headers]
 
     for idx, r in enumerate(items, 1):
@@ -126,13 +128,14 @@ def generate_pdf_invoice(bill_no, party_name, start_str, end_str, bill_date, ite
             Paragraph(str(idx), normal_style),
             Paragraph(str(r[1]), normal_style),
             Paragraph(str(r[2]), normal_style),
-            Paragraph(str(r[3]), normal_style),
+            Paragraph(str(r[3]), bold_style),
             Paragraph(str(r[4]), normal_style),
             Paragraph(str(r[5]), normal_style),
-            Paragraph(f"RS {float(r[6]):,.2f}", normal_style)
+            Paragraph(str(r[6]), normal_style),
+            Paragraph(f"RS {float(r[7]):,.2f}", normal_style)
         ])
 
-    t_items = Table(data, colWidths=[30, 100, 75, 100, 115, 45, 75])
+    t_items = Table(data, colWidths=[25, 95, 65, 75, 85, 100, 35, 60])
     t_items.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#002147')),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -145,8 +148,8 @@ def generate_pdf_invoice(bill_no, party_name, start_str, end_str, bill_date, ite
 
     total_data = [
         [
-            Paragraph("<b>TOTAL PAYABLE AMOUNT:</b>", ParagraphStyle('TotLbl', parent=styles['Normal'], fontSize=12, alignment=2)),
-            Paragraph(f"<b>RS {total_amount:,.2f}/-</b>", ParagraphStyle('TotVal', parent=styles['Normal'], fontSize=12, textColor=colors.HexColor('#008000'), alignment=2))
+            Paragraph("<b>TOTAL PAYABLE AMOUNT:</b>", ParagraphStyle('TotLbl', parent=styles['Normal'], fontSize=11, alignment=2)),
+            Paragraph(f"<b>RS {total_amount:,.2f}/-</b>", ParagraphStyle('TotVal', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#008000'), alignment=2))
         ]
     ]
     t_total = Table(total_data, colWidths=[380, 160])
@@ -214,66 +217,74 @@ def generate_payment_pdf_receipt(rec_id, party_name, bill_no, pay_date, pay_amou
     buffer.seek(0)
     return buffer.getvalue()
 
-# ----------------- HD PRINTS (BOOKING) -----------------
+# ----------------- HD PRINTS (BOOKING - મોટો લોગો અને બ્લૂ હેડર) -----------------
 def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type):
-    width, height = 1200, 620
+    width, height = 1200, 680
     img = Image.new("RGB", (width, height), "white")
     draw = ImageDraw.Draw(img)
 
     try:
-        font_title = ImageFont.truetype("arial.ttf", 30)
-        font_sub = ImageFont.truetype("arial.ttf", 16)
+        font_title = ImageFont.truetype("arialbd.ttf", 46)
+        font_sub = ImageFont.truetype("arial.ttf", 18)
         font_bold = ImageFont.truetype("arialbd.ttf", 18)
-        font_regular = ImageFont.truetype("arial.ttf", 15)
+        font_regular = ImageFont.truetype("arial.ttf", 16)
     except:
         font_title = font_sub = font_bold = font_regular = ImageFont.load_default()
 
-    draw.rectangle([10, 10, width-10, height-10], outline="#002147", width=3)
-    draw.text((width//2 - 150, 20), "COURIER SOLUTION", fill="#002147", font=font_title)
-    draw.text((width//2 - 140, 55), "Express Cargo & Logistics Services", fill="#555555", font=font_sub)
-    draw.line([(20, 80), (width-20, 80)], fill="#002147", width=2)
+    # મુખ્ય આઉટર બોર્ડર
+    draw.rectangle([10, 10, width-10, height-10], outline="#002147", width=4)
 
-    draw.rectangle([20, 90, width-20, 150], outline="#002147", width=2)
-    draw.text((30, 100), f"Consignment No: {cons_no}", fill="red", font=font_bold)
-    draw.text((450, 100), f"Date: {date}", fill="black", font=font_bold)
-    draw.text((850, 100), f"Courier Co: {courier_co}", fill="blue", font=font_bold)
-    draw.text((30, 125), f"Mode: {mode}", fill="black", font=font_regular)
-    draw.text((450, 125), f"Origin: {origin}", fill="black", font=font_regular)
-    draw.text((850, 125), f"Destination: {dest}", fill="black", font=font_regular)
+    # 1. ઉપરની આખી મોટી બ્લૂ હેડર પટ્ટી (Top Banner Header)
+    draw.rectangle([10, 10, width-10, 100], fill="#002147")
+    draw.text((35, 22), "📦 COURIER SOLUTION", fill="white", font=font_title)
+    draw.text((780, 42), "Express Cargo & Logistics Services", fill="#E0E0E0", font=font_sub)
 
-    draw.rectangle([20, 160, width//2 - 10, 390], outline="#002147", width=2)
-    draw.rectangle([20, 160, width//2 - 10, 190], fill="#002147")
-    draw.text((width//4 - 70, 165), "SENDER (From)", fill="white", font=font_bold)
-    draw.text((30, 205), f"Name: {sender_name}", fill="black", font=font_bold)
-    draw.text((30, 240), f"Address: {sender_address}", fill="black", font=font_regular)
-    draw.text((30, 280), f"City/Pin: {sender_city}", fill="black", font=font_regular)
+    # 2. કન્સાઇનમેન્ટ અને કુરિયર માહિતી વાળી પટ્ટી
+    draw.rectangle([20, 110, width-20, 170], outline="#002147", width=2, fill="#F0F4F8")
+    draw.text((35, 120), f"Consignment No: {cons_no}", fill="#D9534F", font=font_bold)
+    draw.text((450, 120), f"Date: {date}", fill="black", font=font_bold)
+    draw.text((850, 120), f"Courier Co: {courier_co}", fill="#002147", font=font_bold)
+    draw.text((35, 145), f"Mode: {mode}", fill="black", font=font_regular)
+    draw.text((450, 145), f"Origin: {origin}", fill="black", font=font_regular)
+    draw.text((850, 145), f"Destination: {dest}", fill="black", font=font_regular)
 
-    draw.rectangle([width//2 + 10, 160, width-20, 390], outline="#002147", width=2)
-    draw.rectangle([width//2 + 10, 160, width-20, 190], fill="#002147")
-    draw.text((3*width//4 - 70, 165), "RECIPIENT (To)", fill="white", font=font_bold)
-    draw.text((width//2 + 20, 205), f"Name: {rec_name}", fill="black", font=font_bold)
-    draw.text((width//2 + 20, 240), f"Address: {rec_address}", fill="black", font=font_regular)
-    draw.text((width//2 + 20, 280), f"City/Pin: {rec_city}", fill="black", font=font_regular)
+    # 3. મોકલનાર (Sender - From)
+    draw.rectangle([20, 180, width//2 - 10, 420], outline="#002147", width=2)
+    draw.rectangle([20, 180, width//2 - 10, 215], fill="#002147")
+    draw.text((width//4 - 70, 188), "SENDER (From)", fill="white", font=font_bold)
+    draw.text((35, 230), f"Name: {sender_name}", fill="black", font=font_bold)
+    draw.text((35, 270), f"Address: {sender_address}", fill="black", font=font_regular)
+    draw.text((35, 330), f"City/Pin: {sender_city}", fill="black", font=font_regular)
 
-    draw.rectangle([20, 400, width-20, 500], outline="#002147", width=2)
-    draw.rectangle([20, 400, width-20, 430], fill="#e6ecf2")
-    draw.text((120, 405), "Weight (Kg)", fill="black", font=font_bold)
-    draw.text((420, 405), "Quantity (Pcs)", fill="black", font=font_bold)
-    draw.text((700, 405), "Total Amount (RS)", fill="black", font=font_bold)
-    draw.text((1000, 405), "Type", fill="black", font=font_bold)
+    # 4. મેળવનાર (Recipient - To)
+    draw.rectangle([width//2 + 10, 180, width-20, 420], outline="#002147", width=2)
+    draw.rectangle([width//2 + 10, 180, width-20, 215], fill="#002147")
+    draw.text((3*width//4 - 70, 188), "RECIPIENT (To)", fill="white", font=font_bold)
+    draw.text((width//2 + 25, 230), f"Name: {rec_name}", fill="black", font=font_bold)
+    draw.text((width//2 + 25, 270), f"Address: {rec_address}", fill="black", font=font_regular)
+    draw.text((width//2 + 25, 330), f"City/Pin: {rec_city}", fill="black", font=font_regular)
 
-    draw.line([(320, 400), (320, 500)], fill="#002147", width=2)
-    draw.line([(620, 400), (620, 500)], fill="#002147", width=2)
-    draw.line([(900, 400), (900, 500)], fill="#002147", width=2)
+    # 5. વજન, નંગ, અને રકમનું ટેબલ
+    draw.rectangle([20, 430, width-20, 540], outline="#002147", width=2)
+    draw.rectangle([20, 430, width-20, 465], fill="#E6ECF2")
+    draw.text((120, 438), "Weight (Kg)", fill="#002147", font=font_bold)
+    draw.text((420, 438), "Quantity (Pcs)", fill="#002147", font=font_bold)
+    draw.text((700, 438), "Total Amount (RS)", fill="#002147", font=font_bold)
+    draw.text((1000, 438), "Type", fill="#002147", font=font_bold)
 
-    draw.text((120, 450), f"{weight} kg", fill="black", font=font_bold)
-    draw.text((420, 450), f"{pcs} Pcs", fill="black", font=font_bold)
-    draw.text((700, 450), f"RS {amount}/-", fill="green", font=font_bold)
-    draw.text((1000, 450), f"{booking_type}", fill="blue" if booking_type == "Cash" else "purple", font=font_bold)
+    draw.line([(320, 430), (320, 540)], fill="#002147", width=2)
+    draw.line([(620, 430), (620, 540)], fill="#002147", width=2)
+    draw.line([(900, 430), (900, 540)], fill="#002147", width=2)
 
-    draw.text((30, 525), "* Subject to terms & conditions. Goods carried at owner's risk.", fill="black", font=font_sub)
-    draw.line([(width-250, 555), (width-50, 555)], fill="black", width=2)
-    draw.text((width-220, 565), "Authorized Signatory", fill="black", font=font_bold)
+    draw.text((120, 485), f"{weight} kg", fill="black", font=font_bold)
+    draw.text((420, 485), f"{pcs} Pcs", fill="black", font=font_bold)
+    draw.text((700, 485), f"RS {amount}/-", fill="green", font=font_bold)
+    draw.text((1000, 485), f"{booking_type}", fill="blue" if booking_type == "Cash" else "purple", font=font_bold)
+
+    # 6. ફૂટર વિગતો અને સહી
+    draw.text((35, 575), "* Subject to terms & conditions. Goods carried at owner's risk.", fill="#555555", font=font_sub)
+    draw.line([(width-260, 615), (width-40, 615)], fill="black", width=2)
+    draw.text((width-230, 625), "Authorized Signatory", fill="black", font=font_bold)
 
     return img
 
@@ -562,7 +573,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                     st.image(img, caption=f"Receipt - {rec_data[0]}", use_container_width=True)
                     buf = io.BytesIO()
                     img.save(buf, format="PNG")
-                    st.download_button(label="🖨️ Download Receipt Image", data=buf.getvalue(), file_name=f"Receipt_{cons_no}.png", mime="image/png")
+                    st.download_button(label="🖨️ Download Receipt Image", data=buf.getvalue(), file_name=f"Receipt_{rec_data[0]}.png", mime="image/png")
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
@@ -595,7 +606,7 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
             if st.button("📥 Download Existing PDF Invoice", type="primary"):
                 conn = sqlite3.connect("courier_database.db")
                 cursor = conn.cursor()
-                cursor.execute("SELECT id, cons_no, date, dest, rec_name, weight, amount FROM receipts WHERE bill_no=?", (existing_bill[0],))
+                cursor.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE bill_no=?", (existing_bill[0],))
                 b_rows = cursor.fetchall()
                 conn.close()
                 if b_rows:
@@ -619,7 +630,7 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
             if st.button("📄 Generate & Create Digital PDF Invoice", type="primary"):
                 conn = sqlite3.connect("courier_database.db")
                 cursor = conn.cursor()
-                cursor.execute("SELECT id, cons_no, date, dest, rec_name, weight, amount FROM receipts WHERE sender_name=? AND booking_type='Credit Account' AND (bill_no IS NULL OR bill_no='') ORDER BY id DESC", (sel_party,))
+                cursor.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE sender_name=? AND booking_type='Credit Account' AND (bill_no IS NULL OR bill_no='') ORDER BY id DESC", (sel_party,))
                 b_rows = cursor.fetchall()
 
                 filtered_bill = []
@@ -631,14 +642,14 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
                         rec_dt = datetime.datetime.strptime(rec_date_str, "%d/%m/%Y").date()
                         if start_date <= rec_dt <= end_date:
                             filtered_bill.append(r)
-                            tot_bill += float(r[6])
+                            tot_bill += float(r[7])
                     except:
                         pass
 
                 if filtered_bill:
                     try:
                         cursor.execute("INSERT INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (?, ?, ?, ?, ?)",
-                                       (generated_bill_no, sel_party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
+                                      (generated_bill_no, sel_party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
                         for item in filtered_bill:
                             cursor.execute("UPDATE receipts SET bill_no=? WHERE id=?", (generated_bill_no, item[0]))
                         conn.commit()
@@ -663,10 +674,11 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
                             "Sr No": idx,
                             "Consignment No": r[1],
                             "Date": r[2],
-                            "Destination": r[3],
-                            "Recipient": r[4],
-                            "Weight (Kg)": r[5],
-                            "Amount (RS)": f"₹ {float(r[6]):,.2f}"
+                            "Courier Co": r[3],
+                            "Destination": r[4],
+                            "Recipient": r[5],
+                            "Weight (Kg)": r[6],
+                            "Amount (RS)": f"₹ {float(r[7]):,.2f}"
                         })
                     
                     st.table(table_data)
@@ -713,20 +725,16 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
     cursor.execute("SELECT bill_no, party_name, total_amount FROM bills ORDER BY id DESC")
     b_list = cursor.fetchall()
     
-    # જે બિલ સંપૂર્ણપણે ભરાઈ ગયા છે તેમને લિસ્ટમાંથી ફિલ્ટર કરી કાઢી નાખો
     unpaid_b_list = []
     for b in b_list:
         b_no = b[0]
-        try:
-            b_tot = float(b[2])
-        except:
-            b_tot = 0.0
+        try: b_tot = float(b[2])
+        except: b_tot = 0.0
             
         cursor.execute("SELECT SUM(CAST(amount AS FLOAT)) FROM party_payments WHERE bill_no=?", (b_no,))
         sum_paid = cursor.fetchone()[0]
         sum_paid = float(sum_paid) if sum_paid else 0.0
         
-        # જો જમા રકમ બિલ રકમ કરતા ઓછી હોય તો જ તેને બાકી બિલ તરીકે બતાવો
         if sum_paid < b_tot:
             unpaid_b_list.append(b)
 
@@ -773,7 +781,6 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                     file_name=f"Payment_Receipt_REC{rec_last_id:04d}_{pay_party}.pdf",
                     mime="application/pdf"
                 )
-                
                 st.rerun()
 
         st.markdown("---")
