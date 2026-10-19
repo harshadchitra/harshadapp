@@ -219,7 +219,6 @@ def generate_payment_pdf_receipt(rec_id, party_name, bill_no, pay_date, pay_amou
 
 # ----------------- ડીઝીટલ બારકોડ ડ્રોઈંગ ફંકશન -----------------
 def draw_barcode(draw, x_start, y_start, text_val, width=280, height=35):
-    # બારકોડ લાઈનો દોરવી
     import random
     random.seed(sum(ord(c) for c in text_val))
     curr_x = x_start
@@ -249,17 +248,13 @@ def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_n
     # મુખ્ય આઉટર બોર્ડર
     draw.rectangle([10, 10, width-10, height-10], outline="black", width=3)
 
-    # 1. હેડર ભાગ (નમૂના જેવો - ડાબે લોગો/ટાઈટલ અને જમણે બારકોડ)
+    # 1. હેડર ભાગ
     draw.rectangle([10, 10, width-10, 110], outline="black", width=2)
-    
-    # ડાબી બાજુ લોગો અને મોટો ટાઈટલ
     draw.text((25, 20), "📦 COURIER SOLUTION", fill="#002147", font=font_header_title)
     draw.text((25, 65), "EXPRESS CARGO & LOGISTICS SERVICES", fill="#333333", font=font_bold)
     
-    # ઉભી લાઇન જમણી બાજુ બારકોડ સેક્શન માટે
     draw.line([(820, 10), (820, 110)], fill="black", width=2)
     
-    # જમણી બાજુ બારકોડ અને કન્સાઇનમેન્ટ નંબર
     draw.text((830, 15), "Consignment Number", fill="black", font=font_label)
     draw_barcode(draw, 830, 38, cons_no, width=340, height=40)
     draw.text((880, 82), f"{cons_no}", fill="black", font=font_bold)
@@ -277,18 +272,16 @@ def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_n
     draw.text((830, 120), f"Date: {date}", fill="black", font=font_bold)
     draw.text((830, 150), f"Booking: {booking_type} ({mode})", fill="black", font=font_bold)
 
-    # 3. Consignor (Sender) & Consignee (Recipient) સેક્શન
+    # 3. Consignor & Consignee સેક્શન
     draw.rectangle([10, 180, width-10, 420], outline="black", width=2)
     draw.line([(width//2, 180), (width//2, 420)], fill="black", width=2)
 
-    # મોકલનાર (Consignor)
     draw.rectangle([10, 180, width//2, 215], fill="#E6ECF2", outline="black")
     draw.text((20, 188), "Consignor (મોકલનાર)", fill="black", font=font_bold)
     draw.text((20, 225), f"{sender_name.upper()}", fill="black", font=font_big_bold)
     draw.text((20, 270), f"Address: {sender_address}", fill="black", font=font_bold)
     draw.text((20, 330), f"City/Pin: {sender_city}", fill="black", font=font_bold)
 
-    # મેળવનાર (Consignee)
     draw.rectangle([width//2, 180, width-10, 215], fill="#E6ECF2", outline="black")
     draw.text((width//2 + 10, 188), "Consignee (મેળવનાર)", fill="black", font=font_bold)
     draw.text((width//2 + 10, 225), f"{rec_name.upper()}", fill="black", font=font_big_bold)
@@ -611,7 +604,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
-# ----------------- ૪. DIGITAL MONTHLY BILLING (PDF INVOICE & ALL PARTIES AUTO-GENERATE) -----------------
+# ----------------- ૪. DIGITAL MONTHLY BILLING -----------------
 elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
     st.subheader("📊 Party Digital PDF Invoice Generator, History & Delete")
     st.info(f"📅 પસંદ કરેલ બિલિંગ સમયગાળો: **{start_str}** થી **{end_str}**")
@@ -666,7 +659,7 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
 
                 conn.close()
                 if success_count > 0:
-                    st.success(f"✅ કુલ {success_count} પાર્ટીઓ માટે નવા બિલ સફળતાપૂર્વક જનરેટ થઈ ગયા છે! નીચે હિસ્ટ્રીમાં જોઈ શકો છો.")
+                    st.success(f"✅ કુલ {success_count} પાર્ટીઓ માટે નવા બિલ સફળતાપૂર્વક જનરેટ થઈ ગયા છે!")
                     st.rerun()
                 else:
                     st.warning("આ સમયગાળામાં કોઈપણ પાર્ટી માટે કોઈ નવી અનબિલ એન્ટ્રી મળી નથી.")
@@ -791,7 +784,7 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
     else:
         st.info("હજુ સુધી કોઈ બિલ જનરેટ થયેલ નથી.")
 
-# ----------------- ૫. PARTY PAYMENT RECEIVE WITH PDF RECEIPT & AUTO-FILTER PAID BILLS -----------------
+# ----------------- ૫. PARTY PAYMENT RECEIVE -----------------
 elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & રસીદ)":
     st.subheader("💳 Party Payment Receive & Receipt Generator")
     
@@ -875,5 +868,23 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
             for r in pay_rows:
                 col_py1, col_py2, col_py3 = st.columns([3, 1.2, 1])
                 with col_py1:
-                    st.write(f"🏢 **{r[1]}** | Bill: <span style='color:red;'><b>{r[2]}</b></span> | Date: {r[3]} | **RS {r[4]}/-** ({r
+                    # અહીં એરર આવતી હતી તે લાઈન હવે સંપૂર્ણપણે સુધારી દીધી છે:
+                    st.write(f"🏢 **{r[1]}** | Bill: **{r[2]}** | Date: {r[3]} | **RS {r[4]}/-** ({r[5]})")
+                    try: tot_received += float(r[4])
+                    except: pass
+                with col_py2:
+                    hist_pdf = generate_payment_pdf_receipt(r[0], r[1], r[2], r[3], r[4], r[5], r[6])
+                    st.download_button("🖨️ Receipt PDF", data=hist_pdf, file_name=f"Payment_Receipt_{r[0]}.pdf", mime="application/pdf", key=f"pdf_pay_{r[0]}")
+                with col_py3:
+                    if st.button("🗑️ Delete Pay", key=f"del_pay_{r[0]}"):
+                        conn = sqlite3.connect("courier_database.db")
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM party_payments WHERE id=?", (r[0],))
+                        conn.commit()
+                        conn.close()
+                        st.success("પેમેન્ટ એન્ટ્રી સફળતાપૂર્વક ડિલીટ થઈ ગઈ છે!")
+                        st.rerun()
+            st.metric("💰 Total Payment Received", f"RS {tot_received:,.2f}/-")
+        else:
+            st.info("કોઈ પેમેન્ટ રિસીવ રેકોર્ડ મળેલ નથી.")
 
