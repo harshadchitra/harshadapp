@@ -43,14 +43,14 @@ def scan_label_image(image_bytes):
             extracted_cons_no = barcode.data.decode('utf-8')
             break
 
-        # 2. Text Reading (OCR for Pincode)
+        # 2. Text Reading (OCR for Pincode & Address text matching)
         gray = cv2.cvtColor(img_np, cv2.COLOR_BGR2GRAY)
         text = pytesseract.image_to_string(gray)
 
         # Indian Pincode Regex Match (6 Digits)
         pincodes = re.findall(r'\b[1-9][0-9]{5}\b', text)
         if pincodes:
-            extracted_pincode = pincodes[0]
+            extracted_pincode = pincodes[-1] # Usually destination pin is at the bottom/last
 
     except Exception:
         pass
@@ -147,7 +147,7 @@ def init_db():
 
 init_db()
 
-# ----------------- PDF RECEIPT GENERATOR WITH PARCEL PHOTO -----------------
+# ----------------- PDF RECEIPT GENERATOR WITH LARGE PARCEL PHOTO -----------------
 def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, img_bytes=None):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -169,7 +169,7 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     f_val_huge = ParagraphStyle('ValHuge', fontName='Helvetica-Bold', fontSize=18, leading=22, textColor=colors.black)
     f_val_blue = ParagraphStyle('ValBlue', fontName='Helvetica-Bold', fontSize=14, leading=18, textColor=colors.blue)
     f_val_green = ParagraphStyle('ValGreen', fontName='Helvetica-Bold', fontSize=18, leading=22, textColor=colors.HexColor('#008000'))
-    f_footer = ParagraphStyle('Foot', fontName='Helvetica', fontSize=9, leading=11, textColor=colors.HexColor('#444444'))
+    f_footer = ParagraphStyle('Foot', fontName='Helvetica', fontSize=9, leading=12, textColor=colors.HexColor('#444444'))
 
     barcode_obj = code128.Code128(cons_no, barHeight=35, barWidth=1.5)
     
@@ -254,29 +254,6 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
         ('PADDING', (0,0), (-1,-1), 8),
     ]))
 
-    # PARCEL PHOTO SECTION
-    photo_element = Paragraph("<i>No Parcel Photo Uploaded</i>", f_footer)
-    if img_bytes:
-        try:
-            img_io = io.BytesIO(img_bytes)
-            photo_element = RLImage(img_io, width=100, height=80)
-        except Exception:
-            photo_element = Paragraph("<i>Image Load Error</i>", f_footer)
-
-    foot_data = [
-        [
-            Paragraph("<b>Shipment Remarks:</b> Booking Generated via Courier Solution.<br/><i>* Proof Photo attached on the right.</i>", f_footer),
-            photo_element,
-            Paragraph("________________________<br/><b>Authorized Signatory</b><br/>(Courier Solution)", f_val_lg)
-        ]
-    ]
-    t_foot = Table(foot_data, colWidths=[245, 110, 190])
-    t_foot.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('ALIGN', (1,0), (1,0), 'CENTER'),
-        ('PADDING', (0,0), (-1,-1), 4),
-    ]))
-
     story.append(t_header)
     story.append(Spacer(1, 6))
     story.append(t_row2)
@@ -285,6 +262,37 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     story.append(Spacer(1, 6))
     story.append(t_row4)
     story.append(Spacer(1, 10))
+
+    # LARGE PARCEL PHOTO SECTION (CENTERED & CLEAR)
+    if img_bytes:
+        try:
+            img_io = io.BytesIO(img_bytes)
+            large_photo = RLImage(img_io, width=220, height=150)
+            photo_table = Table([[large_photo]], colWidths=[545])
+            photo_table.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#cccccc')),
+                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#fafafa')),
+                ('PADDING', (0,0), (-1,-1), 6),
+            ]))
+            story.append(photo_table)
+            story.append(Spacer(1, 10))
+        except Exception:
+            pass
+
+    # REMARKS AND SIGNATURE AT THE BOTTOM
+    foot_data = [
+        [
+            Paragraph("<b>Shipment Remarks:</b> Booking Generated via Courier Solution.<br/><i>* Parcel Proof Photo attached above. Subject to terms.</i>", f_footer),
+            Paragraph("________________________<br/><b>Authorized Signatory</b><br/>(Courier Solution)", f_val_lg)
+        ]
+    ]
+    t_foot = Table(foot_data, colWidths=[335, 210])
+    t_foot.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+        ('PADDING', (0,0), (-1,-1), 4),
+    ]))
     story.append(t_foot)
 
     doc.build(story)
@@ -651,12 +659,13 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
     with tab1:
         st.subheader("Cash Courier Booking")
 
-        # 📷 AUTO-FILL CAMERA SCANNER SECTION
-        st.markdown("### 📷 Auto-Scan Label (સ્માર્ટ ફોટો સ્કેનર)")
+        # 📷 AUTO-FILL CAMERA SCANNER SECTION (AUTO BARCODE & PINCODE)
+        st.markdown("### 📷 Auto-Scan Label (સ્માર્ટ ફોટો સ્કેનર - બારકોડ & પિનકોડ ઓટો-ફિલ)")
         uploaded_photo = st.file_uploader("પાર્સલ/લેબલનો ફોટો લો અથવા અપલોડ કરો:", type=["jpg", "jpeg", "png"], key="c_photo")
 
-        auto_cons = ""
-        auto_pin = ""
+        auto_cons = st.session_state.get("scanned_cons", "")
+        auto_pin = st.session_state.get("scanned_pin", "")
+
         if uploaded_photo:
             img_bytes_temp = uploaded_photo.getvalue()
             auto_cons, auto_pin = scan_label_image(img_bytes_temp)
@@ -784,7 +793,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
         else:
             selected_party = st.selectbox("Select Party Name:", party_names)
 
-            cr_uploaded_photo = st.file_uploader("📷 Auto-Scan Parcel Photo (ફોટો સ્કેન કરો):", type=["jpg", "jpeg", "png"], key="cr_photo")
+            cr_uploaded_photo = st.file_uploader("📷 Auto-Scan Parcel Photo (બારકોડ & પિનકોડ ઓટો-ફિલ):", type=["jpg", "jpeg", "png"], key="cr_photo")
 
             cr_auto_cons = ""
             cr_auto_pin = ""
