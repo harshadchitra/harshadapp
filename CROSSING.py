@@ -3,7 +3,7 @@ import sqlite3
 import datetime
 import io
 from PIL import Image
-from reportlab.lib.pagesizes import letter, landscape
+from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -83,16 +83,25 @@ def init_db():
 
 init_db()
 
-# ----------------- 100% PERFECT HIGH-DEFINATION RECEIPT PDF GENERATOR -----------------
+# ----------------- 100% PERFECT A4 PORTRAIT TOP-ALIGNED HD RECEIPT PDF GENERATOR -----------------
 def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type):
     buffer = io.BytesIO()
-    # લૅન્ડસ્કેપ ફોર્મેટ (792 x 612 points)
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+    
+    # A4 Portrait Size (595.27 x 841.89 points)
+    # topMargin ને 20 રાખ્યું છે જેથી પ્રિન્ટ પેપરના બરાબર ઉપરના ભાગ (Top) થી ચાલુ થાય અને પેપર ન બગડે.
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=letter, 
+        rightMargin=25, 
+        leftMargin=25, 
+        topMargin=20, 
+        bottomMargin=20
+    )
     story = []
 
     styles = getSampleStyleSheet()
 
-    # ફોન્ટ સાઈઝ મોટી અને બોલ્ડ સેટ કરી છે
+    # મોટા અને ઘાટા બોલ્ડ ફોન્ટ્સ
     f_header_title = ParagraphStyle('HTitle', fontName='Helvetica-Bold', fontSize=26, leading=30, textColor=colors.HexColor('#002147'))
     f_header_sub = ParagraphStyle('HSub', fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=colors.HexColor('#333333'))
     f_label_sm = ParagraphStyle('LblSm', fontName='Helvetica-Bold', fontSize=10, leading=12, textColor=colors.black)
@@ -102,6 +111,7 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     f_val_green = ParagraphStyle('ValGreen', fontName='Helvetica-Bold', fontSize=18, leading=22, textColor=colors.HexColor('#008000'))
     f_footer = ParagraphStyle('Foot', fontName='Helvetica', fontSize=9, leading=11, textColor=colors.HexColor('#444444'))
 
+    # કુલ ઉપલબ્ધ પહોળાઈ = 545 points (A4 Portrait Width 595 - Left/Right margins 50)
     # ૧. હેડર સેક્શન & બારકોડ
     barcode_obj = code128.Code128(cons_no, barHeight=35, barWidth=1.5)
     
@@ -120,7 +130,7 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
         ]
     ]
 
-    t_header = Table(header_data, colWidths=[520, 230])
+    t_header = Table(header_data, colWidths=[335, 210])
     t_header.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 1.5, colors.black),
         ('LINEBEFORE', (1,0), (1,-1), 1.5, colors.black),
@@ -131,12 +141,12 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     # ૨. Origin / Destination / Date / Mode
     row2_data = [
         [
-            Paragraph(f"<b>Origin:</b> <font size=14 color='#002147'>{origin.upper()}</font><br/><b>Courier:</b> <font color='blue'>{courier_co.upper()}</font>", f_val_lg),
-            Paragraph(f"<b>Destination:</b><br/><font size=18>{dest.upper()}</font>", f_val_huge),
-            Paragraph(f"<b>Date:</b> {date}<br/><b>Booking:</b> {booking_type} ({mode})", f_val_lg)
+            Paragraph(f"<b>Origin:</b> <font size=13 color='#002147'>{origin.upper()}</font><br/><b>Courier:</b> <font color='blue'>{courier_co.upper()}</font>", f_val_lg),
+            Paragraph(f"<b>Destination:</b><br/><font size=16>{dest.upper()}</font>", f_val_huge),
+            Paragraph(f"<b>Date:</b> {date}<br/><b>Booking:</b> {booking_type}", f_val_lg)
         ]
     ]
-    t_row2 = Table(row2_data, colWidths=[250, 270, 230])
+    t_row2 = Table(row2_data, colWidths=[175, 200, 170])
     t_row2.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 1.5, colors.black),
         ('GRID', (0,0), (-1,-1), 1.5, colors.black),
@@ -151,11 +161,11 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
             Paragraph("CONSIGNEE (TO)", f_val_lg)
         ],
         [
-            Paragraph(f"<font size=16 color='#002147'><b>{sender_name.upper()}</b></font><br/><br/><b>Address:</b> {sender_address}<br/><br/><b>City/Pin:</b> {sender_city}", f_val_lg),
-            Paragraph(f"<font size=16 color='#002147'><b>{rec_name.upper()}</b></font><br/><br/><b>Address:</b> {rec_address}<br/><br/><b>City/Pin:</b> {rec_city}", f_val_lg)
+            Paragraph(f"<font size=14 color='#002147'><b>{sender_name.upper()}</b></font><br/><br/><b>Address:</b> {sender_address}<br/><br/><b>City/Pin:</b> {sender_city}", f_val_lg),
+            Paragraph(f"<font size=14 color='#002147'><b>{rec_name.upper()}</b></font><br/><br/><b>Address:</b> {rec_address}<br/><br/><b>City/Pin:</b> {rec_city}", f_val_lg)
         ]
     ]
-    t_row3 = Table(row3_data, colWidths=[375, 375])
+    t_row3 = Table(row3_data, colWidths=[272.5, 272.5])
     t_row3.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 1.5, colors.black),
         ('GRID', (0,0), (-1,-1), 1.5, colors.black),
@@ -180,7 +190,7 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
             Paragraph(f"<b>{booking_type}</b>", f_val_blue if booking_type == 'Cash' else f_val_lg)
         ]
     ]
-    t_row4 = Table(row4_data, colWidths=[180, 180, 210, 180])
+    t_row4 = Table(row4_data, colWidths=[120, 120, 165, 140])
     t_row4.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 1.5, colors.black),
         ('GRID', (0,0), (-1,-1), 1.5, colors.black),
@@ -196,20 +206,20 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
             Paragraph("____________________________<br/><b>Authorized Signatory</b><br/>(Courier Solution)", f_val_lg)
         ]
     ]
-    t_foot = Table(foot_data, colWidths=[500, 250])
+    t_foot = Table(foot_data, colWidths=[335, 210])
     t_foot.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
         ('PADDING', (0,0), (-1,-1), 6),
     ]))
 
     story.append(t_header)
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 6))
     story.append(t_row2)
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 6))
     story.append(t_row3)
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 6))
     story.append(t_row4)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 15))
     story.append(t_foot)
 
     doc.build(story)
@@ -492,13 +502,12 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                     
                     pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Cash')
                     
-                    # Try Converting PDF to Image for Streamlit Display
                     try:
                         from pdf2image import convert_from_bytes
                         images = convert_from_bytes(pdf_bytes)
-                        st.image(images[0], caption=f"HD Receipt - {cons_no}", use_container_width=True)
+                        st.image(images[0], caption=f"HD Portrait Receipt - {cons_no}", use_container_width=True)
                     except:
-                        st.info("💡 PDF રસીદ સફળતાપૂર્વક બની ગઈ છે. નીચે આપેલા બટનથી HD પ્રિન્ટ ડાઉનલોડ કરો.")
+                        st.info("💡 PDF રસીદ સફળતાપૂર્વક બની ગઈ છે.")
 
                     st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
                 except sqlite3.IntegrityError:
@@ -569,7 +578,7 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                     try:
                         from pdf2image import convert_from_bytes
                         images = convert_from_bytes(pdf_bytes)
-                        st.image(images[0], caption=f"HD Receipt - {rec_data[0]}", use_container_width=True)
+                        st.image(images[0], caption=f"HD Portrait Receipt - {rec_data[0]}", use_container_width=True)
                     except:
                         pass
                     st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{rec_data[0]}.pdf", mime="application/pdf")
@@ -676,7 +685,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                     try:
                         from pdf2image import convert_from_bytes
                         images = convert_from_bytes(pdf_bytes)
-                        st.image(images[0], caption=f"Receipt - {rec_data[0]}", use_container_width=True)
+                        st.image(images[0], caption=f"Receipt - {cons_no}", use_container_width=True)
                     except:
                         pass
                     st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
