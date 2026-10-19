@@ -1,4 +1,7 @@
-reportlab
-pdf2image
 streamlit
-pillow
+pytesseract
+pyzbar
+opencv-python-headless
+numpy
+reportlab
+Pillow
