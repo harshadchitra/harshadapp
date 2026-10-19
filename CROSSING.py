@@ -217,7 +217,7 @@ def generate_payment_pdf_receipt(rec_id, party_name, bill_no, pay_date, pay_amou
     buffer.seek(0)
     return buffer.getvalue()
 
-# ----------------- HD PRINTS (BOOKING - મોટો લોગો અને બ્લૂ હેડર) -----------------
+# ----------------- HD PRINTS (BOOKING - મોટા અને આકર્ષક ફોન્ટ્સ) -----------------
 def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type):
     width, height = 1200, 680
     img = Image.new("RGB", (width, height), "white")
@@ -225,64 +225,65 @@ def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_n
 
     try:
         font_title = ImageFont.truetype("arialbd.ttf", 46)
-        font_sub = ImageFont.truetype("arial.ttf", 18)
-        font_bold = ImageFont.truetype("arialbd.ttf", 18)
-        font_regular = ImageFont.truetype("arial.ttf", 16)
+        font_sub = ImageFont.truetype("arial.ttf", 22)
+        font_bold = ImageFont.truetype("arialbd.ttf", 22)
+        font_regular = ImageFont.truetype("arial.ttf", 20)
+        font_footer = ImageFont.truetype("arial.ttf", 15)
     except:
-        font_title = font_sub = font_bold = font_regular = ImageFont.load_default()
+        font_title = font_sub = font_bold = font_regular = font_footer = ImageFont.load_default()
 
     # મુખ્ય આઉટર બોર્ડર
     draw.rectangle([10, 10, width-10, height-10], outline="#002147", width=4)
 
-    # 1. ઉપરની આખી મોટી બ્લૂ હેડર પટ્ટી (Top Banner Header)
-    draw.rectangle([10, 10, width-10, 100], fill="#002147")
-    draw.text((35, 22), "📦 COURIER SOLUTION", fill="white", font=font_title)
-    draw.text((780, 42), "Express Cargo & Logistics Services", fill="#E0E0E0", font=font_sub)
+    # 1. ઉપરની આખી મોટી બ્લૂ હેડર પટ્ટી
+    draw.rectangle([10, 10, width-10, 110], fill="#002147")
+    draw.text((35, 20), "📦 COURIER SOLUTION", fill="white", font=font_title)
+    draw.text((35, 75), "Express Cargo & Logistics Services", fill="#E0E0E0", font=font_sub)
 
     # 2. કન્સાઇનમેન્ટ અને કુરિયર માહિતી વાળી પટ્ટી
-    draw.rectangle([20, 110, width-20, 170], outline="#002147", width=2, fill="#F0F4F8")
-    draw.text((35, 120), f"Consignment No: {cons_no}", fill="#D9534F", font=font_bold)
-    draw.text((450, 120), f"Date: {date}", fill="black", font=font_bold)
-    draw.text((850, 120), f"Courier Co: {courier_co}", fill="#002147", font=font_bold)
-    draw.text((35, 145), f"Mode: {mode}", fill="black", font=font_regular)
-    draw.text((450, 145), f"Origin: {origin}", fill="black", font=font_regular)
-    draw.text((850, 145), f"Destination: {dest}", fill="black", font=font_regular)
+    draw.rectangle([20, 120, width-20, 190], outline="#002147", width=2, fill="#F0F4F8")
+    draw.text((35, 130), f"Consignment No: {cons_no}", fill="#D9534F", font=font_bold)
+    draw.text((450, 130), f"Date: {date}", fill="black", font=font_bold)
+    draw.text((850, 130), f"Courier Co: {courier_co}", fill="#002147", font=font_bold)
+    draw.text((35, 160), f"Mode: {mode}", fill="black", font=font_regular)
+    draw.text((450, 160), f"Origin: {origin}", fill="black", font=font_regular)
+    draw.text((850, 160), f"Destination: {dest}", fill="black", font=font_regular)
 
     # 3. મોકલનાર (Sender - From)
-    draw.rectangle([20, 180, width//2 - 10, 420], outline="#002147", width=2)
-    draw.rectangle([20, 180, width//2 - 10, 215], fill="#002147")
-    draw.text((width//4 - 70, 188), "SENDER (From)", fill="white", font=font_bold)
-    draw.text((35, 230), f"Name: {sender_name}", fill="black", font=font_bold)
-    draw.text((35, 270), f"Address: {sender_address}", fill="black", font=font_regular)
-    draw.text((35, 330), f"City/Pin: {sender_city}", fill="black", font=font_regular)
+    draw.rectangle([20, 200, width//2 - 10, 430], outline="#002147", width=2)
+    draw.rectangle([20, 200, width//2 - 10, 240], fill="#002147")
+    draw.text((width//4 - 85, 207), "SENDER (From)", fill="white", font=font_bold)
+    draw.text((35, 255), f"Name: {sender_name}", fill="black", font=font_bold)
+    draw.text((35, 305), f"Address: {sender_address}", fill="black", font=font_regular)
+    draw.text((35, 370), f"City/Pin: {sender_city}", fill="black", font=font_regular)
 
     # 4. મેળવનાર (Recipient - To)
-    draw.rectangle([width//2 + 10, 180, width-20, 420], outline="#002147", width=2)
-    draw.rectangle([width//2 + 10, 180, width-20, 215], fill="#002147")
-    draw.text((3*width//4 - 70, 188), "RECIPIENT (To)", fill="white", font=font_bold)
-    draw.text((width//2 + 25, 230), f"Name: {rec_name}", fill="black", font=font_bold)
-    draw.text((width//2 + 25, 270), f"Address: {rec_address}", fill="black", font=font_regular)
-    draw.text((width//2 + 25, 330), f"City/Pin: {rec_city}", fill="black", font=font_regular)
+    draw.rectangle([width//2 + 10, 200, width-20, 430], outline="#002147", width=2)
+    draw.rectangle([width//2 + 10, 200, width-20, 240], fill="#002147")
+    draw.text((3*width//4 - 85, 207), "RECIPIENT (To)", fill="white", font=font_bold)
+    draw.text((width//2 + 25, 255), f"Name: {rec_name}", fill="black", font=font_bold)
+    draw.text((width//2 + 25, 305), f"Address: {rec_address}", fill="black", font=font_regular)
+    draw.text((width//2 + 25, 370), f"City/Pin: {rec_city}", fill="black", font=font_regular)
 
     # 5. વજન, નંગ, અને રકમનું ટેબલ
-    draw.rectangle([20, 430, width-20, 540], outline="#002147", width=2)
-    draw.rectangle([20, 430, width-20, 465], fill="#E6ECF2")
-    draw.text((120, 438), "Weight (Kg)", fill="#002147", font=font_bold)
-    draw.text((420, 438), "Quantity (Pcs)", fill="#002147", font=font_bold)
-    draw.text((700, 438), "Total Amount (RS)", fill="#002147", font=font_bold)
-    draw.text((1000, 438), "Type", fill="#002147", font=font_bold)
+    draw.rectangle([20, 440, width-20, 550], outline="#002147", width=2)
+    draw.rectangle([20, 440, width-20, 480], fill="#E6ECF2")
+    draw.text((120, 448), "Weight (Kg)", fill="#002147", font=font_bold)
+    draw.text((420, 448), "Quantity (Pcs)", fill="#002147", font=font_bold)
+    draw.text((700, 448), "Total Amount (RS)", fill="#002147", font=font_bold)
+    draw.text((1000, 448), "Type", fill="#002147", font=font_bold)
 
-    draw.line([(320, 430), (320, 540)], fill="#002147", width=2)
-    draw.line([(620, 430), (620, 540)], fill="#002147", width=2)
-    draw.line([(900, 430), (900, 540)], fill="#002147", width=2)
+    draw.line([(320, 440), (320, 550)], fill="#002147", width=2)
+    draw.line([(620, 440), (620, 550)], fill="#002147", width=2)
+    draw.line([(900, 440), (900, 550)], fill="#002147", width=2)
 
-    draw.text((120, 485), f"{weight} kg", fill="black", font=font_bold)
-    draw.text((420, 485), f"{pcs} Pcs", fill="black", font=font_bold)
-    draw.text((700, 485), f"RS {amount}/-", fill="green", font=font_bold)
-    draw.text((1000, 485), f"{booking_type}", fill="blue" if booking_type == "Cash" else "purple", font=font_bold)
+    draw.text((120, 498), f"{weight} kg", fill="black", font=font_bold)
+    draw.text((420, 498), f"{pcs} Pcs", fill="black", font=font_bold)
+    draw.text((700, 498), f"RS {amount}/-", fill="green", font=font_bold)
+    draw.text((1000, 498), f"{booking_type}", fill="blue" if booking_type == "Cash" else "purple", font=font_bold)
 
-    # 6. ફૂટર વિગતો અને સહી
-    draw.text((35, 575), "* Subject to terms & conditions. Goods carried at owner's risk.", fill="#555555", font=font_sub)
+    # 6. ફૂટર વિગતો અને સહી (ફક્ત ટર્મ્સના ફોન્ટ નાના રાખ્યા છે)
+    draw.text((35, 580), "* Subject to terms & conditions. Goods carried at owner's risk.", fill="#555555", font=font_footer)
     draw.line([(width-260, 615), (width-40, 615)], fill="black", width=2)
     draw.text((width-230, 625), "Authorized Signatory", fill="black", font=font_bold)
 
@@ -573,11 +574,11 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                     st.image(img, caption=f"Receipt - {rec_data[0]}", use_container_width=True)
                     buf = io.BytesIO()
                     img.save(buf, format="PNG")
-                    st.download_button(label="🖨️ Download Receipt Image", data=buf.getvalue(), file_name=f"Receipt_{rec_data[0]}.png", mime="image/png")
+                    st.download_button(label="🖨️ Download Receipt Image", data=buf.getvalue(), file_name=f"Receipt_{cons_no}.png", mime="image/png")
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
-# ----------------- ૪. DIGITAL MONTHLY BILLING (PDF INVOICE & HISTORY + DELETE) -----------------
+# ----------------- ૪. DIGITAL MONTHLY BILLING (PDF INVOICE & ALL PARTIES AUTO-GENERATE) -----------------
 elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
     st.subheader("📊 Party Digital PDF Invoice Generator, History & Delete")
     st.info(f"📅 પસંદ કરેલ બિલિંગ સમયગાળો: **{start_str}** થી **{end_str}**")
@@ -591,101 +592,148 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
     if not p_list:
         st.warning("કોઈ પાર્ટી ઉમેરેલી નથી.")
     else:
-        sel_party = st.selectbox("Select Party for Bill (બિલ બનાવવાની પાર્ટી પસંદ કરો):", p_list)
+        # ઓલ પાર્ટી વિકલ્પ સાથે ડ્રોપડાઉન
+        select_options = ["🌐 All Parties (બધી પાર્ટીઓ માટે એકસાથે)"] + p_list
+        sel_party = st.selectbox("Select Party for Bill (બિલ બનાવવાની પાર્ટી પસંદ કરો):", select_options)
         
-        conn = sqlite3.connect("courier_database.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT bill_no, bill_date, total_amount FROM bills WHERE party_name=? AND period=?", (sel_party, f"{start_str} to {end_str}"))
-        existing_bill = cursor.fetchone()
-        conn.close()
-
-        if existing_bill:
-            st.warning(f"⚠️ આ પાર્ટી ('{sel_party}') માટે આ સમયગાળાનું બિલ પહેલેથી જ જનરેટ થઈ ગયેલ છે!")
-            st.info(f"બિલ નંબર: **{existing_bill[0]}** | તારીખ: {existing_bill[1]} | કુલ રકમ: RS {existing_bill[2]}/-")
-            
-            if st.button("📥 Download Existing PDF Invoice", type="primary"):
+        if sel_party == "🌐 All Parties (બધી પાર્ટીઓ માટે એકસાથે)":
+            st.info("💡 તમે 'All Parties' પસંદ કર્યું છે. નીચેનું બટન દબાવવાથી તમામ પાર્ટીઓના બાકી રહેલા ક્રેડિટ બિલ એકસાથે જનરેટ થઈ જશે.")
+            if st.button("🚀 Generate All Parties Bills (બધી પાર્ટીના બિલ બનાવો)", type="primary"):
                 conn = sqlite3.connect("courier_database.db")
                 cursor = conn.cursor()
-                cursor.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE bill_no=?", (existing_bill[0],))
-                b_rows = cursor.fetchall()
-                conn.close()
-                if b_rows:
-                    pdf_bytes = generate_pdf_invoice(existing_bill[0], sel_party, start_str, end_str, existing_bill[1], b_rows, float(existing_bill[2]))
-                    st.download_button(
-                        label="📄 Download PDF Invoice",
-                        data=pdf_bytes,
-                        file_name=f"Invoice_{existing_bill[0]}_{sel_party}.pdf",
-                        mime="application/pdf"
-                    )
-        else:
-            conn_temp = sqlite3.connect("courier_database.db")
-            cur_temp = conn_temp.cursor()
-            cur_temp.execute("SELECT COUNT(*) FROM bills")
-            b_count = cur_temp.fetchone()[0] + 1
-            conn_temp.close()
-            generated_bill_no = f"BILL-2026-{b_count:03d}"
+                
+                success_count = 0
+                for party in p_list:
+                    # ચેક કરો કે આ પાર્ટીના આ સમયગાળામાં અનબિલ એન્ટ્રી છે કે નહીં
+                    cursor.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE sender_name=? AND booking_type='Credit Account' AND (bill_no IS NULL OR bill_no='') ORDER BY id DESC", (party,))
+                    b_rows = cursor.fetchall()
 
-            st.text_input("Generated Bill No (ઓટો બિલ નંબર):", value=generated_bill_no, disabled=True)
+                    filtered_bill = []
+                    tot_bill = 0
 
-            if st.button("📄 Generate & Create Digital PDF Invoice", type="primary"):
-                conn = sqlite3.connect("courier_database.db")
-                cursor = conn.cursor()
-                cursor.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE sender_name=? AND booking_type='Credit Account' AND (bill_no IS NULL OR bill_no='') ORDER BY id DESC", (sel_party,))
-                b_rows = cursor.fetchall()
+                    for r in b_rows:
+                        rec_date_str = r[2]
+                        try:
+                            rec_dt = datetime.datetime.strptime(rec_date_str, "%d/%m/%Y").date()
+                            if start_date <= rec_dt <= end_date:
+                                filtered_bill.append(r)
+                                tot_bill += float(r[7])
+                        except:
+                            pass
 
-                filtered_bill = []
-                tot_bill = 0
+                    if filtered_bill:
+                        # નવો બિલ નંબર બનાવો
+                        cursor.execute("SELECT COUNT(*) FROM bills")
+                        b_count = cursor.fetchone()[0] + 1
+                        generated_bill_no = f"BILL-2026-{b_count:03d}"
 
-                for r in b_rows:
-                    rec_date_str = r[2]
-                    try:
-                        rec_dt = datetime.datetime.strptime(rec_date_str, "%d/%m/%Y").date()
-                        if start_date <= rec_dt <= end_date:
-                            filtered_bill.append(r)
-                            tot_bill += float(r[7])
-                    except:
-                        pass
-
-                if filtered_bill:
-                    try:
                         cursor.execute("INSERT INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (?, ?, ?, ?, ?)",
-                                      (generated_bill_no, sel_party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
+                                      (generated_bill_no, party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
                         for item in filtered_bill:
                             cursor.execute("UPDATE receipts SET bill_no=? WHERE id=?", (generated_bill_no, item[0]))
                         conn.commit()
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-                    conn.close()
+                        success_count += 1
 
-                    pdf_bytes = generate_pdf_invoice(generated_bill_no, sel_party, start_str, end_str, today.strftime("%d/%m/%Y"), filtered_bill, tot_bill)
-
-                    st.success(f"✅ પાર્ટી '{sel_party}' નું બિલ સફળતાપૂર્વક જનરેટ થઈ ગયું છે!")
-                    
-                    st.download_button(
-                        label="📄 Download Digital Invoice PDF (પીડીએફ ડાઉનલોડ કરો)",
-                        data=pdf_bytes,
-                        file_name=f"Invoice_{generated_bill_no}_{sel_party}.pdf",
-                        mime="application/pdf"
-                    )
-
-                    table_data = []
-                    for idx, r in enumerate(filtered_bill, 1):
-                        table_data.append({
-                            "Sr No": idx,
-                            "Consignment No": r[1],
-                            "Date": r[2],
-                            "Courier Co": r[3],
-                            "Destination": r[4],
-                            "Recipient": r[5],
-                            "Weight (Kg)": r[6],
-                            "Amount (RS)": f"₹ {float(r[7]):,.2f}"
-                        })
-                    
-                    st.table(table_data)
-                    st.metric("Total Payable Bill Amount", f"RS {tot_bill:,.2f}/-")
+                conn.close()
+                if success_count > 0:
+                    st.success(f"✅ કુલ {success_count} પાર્ટીઓ માટે નવા બિલ સફળતાપૂર્વક જનરેટ થઈ ગયા છે! નીચે હિસ્ટ્રીમાં જોઈ શકો છો.")
+                    st.rerun()
                 else:
+                    st.warning("આ સમયગાળામાં કોઈપણ પાર્ટી માટે કોઈ નવી અનબિલ એન્ટ્રી મળી નથી.")
+        else:
+            conn = sqlite3.connect("courier_database.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT bill_no, bill_date, total_amount FROM bills WHERE party_name=? AND period=?", (sel_party, f"{start_str} to {end_str}"))
+            existing_bill = cursor.fetchone()
+            conn.close()
+
+            if existing_bill:
+                st.warning(f"⚠️ આ પાર્ટી ('{sel_party}') માટે આ સમયગાળાનું બિલ પહેલેથી જ જનરેટ થઈ ગયેલ છે!")
+                st.info(f"બિલ નંબર: **{existing_bill[0]}** | તારીખ: {existing_bill[1]} | કુલ રકમ: RS {existing_bill[2]}/-")
+                
+                if st.button("📥 Download Existing PDF Invoice", type="primary"):
+                    conn = sqlite3.connect("courier_database.db")
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE bill_no=?", (existing_bill[0],))
+                    b_rows = cursor.fetchall()
                     conn.close()
-                    st.info(f"પાર્ટી '{sel_party}' માટે આ સમયગાળામાં કોઈ નવું અનબિલ થયેલ ક્રેડિટ બુકિંગ મળેલ નથી.")
+                    if b_rows:
+                        pdf_bytes = generate_pdf_invoice(existing_bill[0], sel_party, start_str, end_str, existing_bill[1], b_rows, float(existing_bill[2]))
+                        st.download_button(
+                            label="📄 Download PDF Invoice",
+                            data=pdf_bytes,
+                            file_name=f"Invoice_{existing_bill[0]}_{sel_party}.pdf",
+                            mime="application/pdf"
+                        )
+            else:
+                conn_temp = sqlite3.connect("courier_database.db")
+                cur_temp = conn_temp.cursor()
+                cur_temp.execute("SELECT COUNT(*) FROM bills")
+                b_count = cur_temp.fetchone()[0] + 1
+                conn_temp.close()
+                generated_bill_no = f"BILL-2026-{b_count:03d}"
+
+                st.text_input("Generated Bill No (ઓટો બિલ નંબર):", value=generated_bill_no, disabled=True)
+
+                if st.button("📄 Generate & Create Digital PDF Invoice", type="primary"):
+                    conn = sqlite3.connect("courier_database.db")
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE sender_name=? AND booking_type='Credit Account' AND (bill_no IS NULL OR bill_no='') ORDER BY id DESC", (sel_party,))
+                    b_rows = cursor.fetchall()
+
+                    filtered_bill = []
+                    tot_bill = 0
+
+                    for r in b_rows:
+                        rec_date_str = r[2]
+                        try:
+                            rec_dt = datetime.datetime.strptime(rec_date_str, "%d/%m/%Y").date()
+                            if start_date <= rec_dt <= end_date:
+                                filtered_bill.append(r)
+                                tot_bill += float(r[7])
+                        except:
+                            pass
+
+                    if filtered_bill:
+                        try:
+                            cursor.execute("INSERT INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (?, ?, ?, ?, ?)",
+                                          (generated_bill_no, sel_party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
+                            for item in filtered_bill:
+                                cursor.execute("UPDATE receipts SET bill_no=? WHERE id=?", (generated_bill_no, item[0]))
+                            conn.commit()
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+                        conn.close()
+
+                        pdf_bytes = generate_pdf_invoice(generated_bill_no, sel_party, start_str, end_str, today.strftime("%d/%m/%Y"), filtered_bill, tot_bill)
+
+                        st.success(f"✅ પાર્ટી '{sel_party}' નું બિલ સફળતાપૂર્વક જનરેટ થઈ ગયું છે!")
+                        
+                        st.download_button(
+                            label="📄 Download Digital Invoice PDF (પીડીએફ ડાઉનલોડ કરો)",
+                            data=pdf_bytes,
+                            file_name=f"Invoice_{generated_bill_no}_{sel_party}.pdf",
+                            mime="application/pdf"
+                        )
+
+                        table_data = []
+                        for idx, r in enumerate(filtered_bill, 1):
+                            table_data.append({
+                                "Sr No": idx,
+                                "Consignment No": r[1],
+                                "Date": r[2],
+                                "Courier Co": r[3],
+                                "Destination": r[4],
+                                "Recipient": r[5],
+                                "Weight (Kg)": r[6],
+                                "Amount (RS)": f"₹ {float(r[7]):,.2f}"
+                            })
+                        
+                        st.table(table_data)
+                        st.metric("Total Payable Bill Amount", f"RS {tot_bill:,.2f}/-")
+                    else:
+                        conn.close()
+                        st.info(f"પાર્ટી '{sel_party}' માટે આ સમયગાળામાં કોઈ નવું અનબિલ થયેલ ક્રેડિટ બુકિંગ મળેલ નથી.")
 
     st.markdown("---")
     st.subheader("📜 Generated Bills History & Delete (બિલ હિસ્ટ્રી અને ડિલીટ ઓપ્શન)")
