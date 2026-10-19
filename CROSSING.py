@@ -2,32 +2,16 @@ import streamlit as st
 import sqlite3
 import datetime
 import io
-import urllib.request
-import os
-from PIL import Image, ImageDraw, ImageFont
-from reportlab.lib.pagesizes import letter
+from PIL import Image
+from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.graphics.shapes import Drawing
-from reportlab.graphics.barcode import qr
+from reportlab.graphics.shapes import Drawing, Rect, Line
+from reportlab.graphics.barcode import qr, code128
 
 # Page Configuration
 st.set_page_config(page_title="Courier Solution", page_icon="📦", layout="centered")
-
-# ----------------- HD BOLD FONT DOWNLOADER -----------------
-@st.cache_resource
-def get_clean_bold_font():
-    font_path = "Roboto-Bold.ttf"
-    if not os.path.exists(font_path):
-        try:
-            url = "https://github.com/google/fonts/raw/main/ofl/roboto/Roboto-Bold.ttf"
-            urllib.request.urlretrieve(url, font_path)
-        except:
-            pass
-    return font_path
-
-font_file = get_clean_bold_font()
 
 # ----------------- ડેટાબેઝ સેટઅપ -----------------
 def init_db():
@@ -98,6 +82,139 @@ def init_db():
     conn.close()
 
 init_db()
+
+# ----------------- 100% PERFECT HIGH-DEFINATION RECEIPT PDF GENERATOR -----------------
+def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type):
+    buffer = io.BytesIO()
+    # લૅન્ડસ્કેપ ફોર્મેટ (792 x 612 points)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
+    story = []
+
+    styles = getSampleStyleSheet()
+
+    # ફોન્ટ સાઈઝ મોટી અને બોલ્ડ સેટ કરી છે
+    f_header_title = ParagraphStyle('HTitle', fontName='Helvetica-Bold', fontSize=26, leading=30, textColor=colors.HexColor('#002147'))
+    f_header_sub = ParagraphStyle('HSub', fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=colors.HexColor('#333333'))
+    f_label_sm = ParagraphStyle('LblSm', fontName='Helvetica-Bold', fontSize=10, leading=12, textColor=colors.black)
+    f_val_lg = ParagraphStyle('ValLg', fontName='Helvetica-Bold', fontSize=14, leading=18, textColor=colors.black)
+    f_val_huge = ParagraphStyle('ValHuge', fontName='Helvetica-Bold', fontSize=18, leading=22, textColor=colors.black)
+    f_val_blue = ParagraphStyle('ValBlue', fontName='Helvetica-Bold', fontSize=14, leading=18, textColor=colors.blue)
+    f_val_green = ParagraphStyle('ValGreen', fontName='Helvetica-Bold', fontSize=18, leading=22, textColor=colors.HexColor('#008000'))
+    f_footer = ParagraphStyle('Foot', fontName='Helvetica', fontSize=9, leading=11, textColor=colors.HexColor('#444444'))
+
+    # ૧. હેડર સેક્શન & બારકોડ
+    barcode_obj = code128.Code128(cons_no, barHeight=35, barWidth=1.5)
+    
+    header_data = [
+        [
+            Paragraph("📦 <b>COURIER SOLUTION</b>", f_header_title),
+            Paragraph("Consignment Number", f_label_sm)
+        ],
+        [
+            Paragraph("<b>EXPRESS CARGO & LOGISTICS SERVICES</b>", f_header_sub),
+            barcode_obj
+        ],
+        [
+            "",
+            Paragraph(f"<b>{cons_no}</b>", f_val_lg)
+        ]
+    ]
+
+    t_header = Table(header_data, colWidths=[520, 230])
+    t_header.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1.5, colors.black),
+        ('LINEBEFORE', (1,0), (1,-1), 1.5, colors.black),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('PADDING', (0,0), (-1,-1), 6),
+    ]))
+
+    # ૨. Origin / Destination / Date / Mode
+    row2_data = [
+        [
+            Paragraph(f"<b>Origin:</b> <font size=14 color='#002147'>{origin.upper()}</font><br/><b>Courier:</b> <font color='blue'>{courier_co.upper()}</font>", f_val_lg),
+            Paragraph(f"<b>Destination:</b><br/><font size=18>{dest.upper()}</font>", f_val_huge),
+            Paragraph(f"<b>Date:</b> {date}<br/><b>Booking:</b> {booking_type} ({mode})", f_val_lg)
+        ]
+    ]
+    t_row2 = Table(row2_data, colWidths=[250, 270, 230])
+    t_row2.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1.5, colors.black),
+        ('GRID', (0,0), (-1,-1), 1.5, colors.black),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('PADDING', (0,0), (-1,-1), 8),
+    ]))
+
+    # ૩. Consignor & Consignee
+    row3_data = [
+        [
+            Paragraph("CONSIGNOR (FROM)", f_val_lg),
+            Paragraph("CONSIGNEE (TO)", f_val_lg)
+        ],
+        [
+            Paragraph(f"<font size=16 color='#002147'><b>{sender_name.upper()}</b></font><br/><br/><b>Address:</b> {sender_address}<br/><br/><b>City/Pin:</b> {sender_city}", f_val_lg),
+            Paragraph(f"<font size=16 color='#002147'><b>{rec_name.upper()}</b></font><br/><br/><b>Address:</b> {rec_address}<br/><br/><b>City/Pin:</b> {rec_city}", f_val_lg)
+        ]
+    ]
+    t_row3 = Table(row3_data, colWidths=[375, 375])
+    t_row3.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1.5, colors.black),
+        ('GRID', (0,0), (-1,-1), 1.5, colors.black),
+        ('BACKGROUND', (0,0), (0,0), colors.HexColor('#E6ECF2')),
+        ('BACKGROUND', (1,0), (1,0), colors.HexColor('#E6ECF2')),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('PADDING', (0,0), (-1,-1), 8),
+    ]))
+
+    # ૪. Pcs, Weight, Amount
+    row4_data = [
+        [
+            Paragraph("Pieces (Pcs)", f_label_sm),
+            Paragraph("Weight (Kg)", f_label_sm),
+            Paragraph("Total Amount (RS)", f_label_sm),
+            Paragraph("Payment Status", f_label_sm)
+        ],
+        [
+            Paragraph(f"<b>{pcs} Pcs</b>", f_val_huge),
+            Paragraph(f"<b>{weight} Kg</b>", f_val_huge),
+            Paragraph(f"<b>RS {amount}/-</b>", f_val_green),
+            Paragraph(f"<b>{booking_type}</b>", f_val_blue if booking_type == 'Cash' else f_val_lg)
+        ]
+    ]
+    t_row4 = Table(row4_data, colWidths=[180, 180, 210, 180])
+    t_row4.setStyle(TableStyle([
+        ('BOX', (0,0), (-1,-1), 1.5, colors.black),
+        ('GRID', (0,0), (-1,-1), 1.5, colors.black),
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#F0F4F8')),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('PADDING', (0,0), (-1,-1), 8),
+    ]))
+
+    # ૫. Footer
+    foot_data = [
+        [
+            Paragraph("<b>Shipment Remarks:</b> Booking Generated via Courier Solution Management System.<br/><i>* Risk Charge Included in Gross Amt, if any. Subject to terms & conditions.</i>", f_footer),
+            Paragraph("____________________________<br/><b>Authorized Signatory</b><br/>(Courier Solution)", f_val_lg)
+        ]
+    ]
+    t_foot = Table(foot_data, colWidths=[500, 250])
+    t_foot.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+        ('PADDING', (0,0), (-1,-1), 6),
+    ]))
+
+    story.append(t_header)
+    story.append(Spacer(1, 4))
+    story.append(t_row2)
+    story.append(Spacer(1, 4))
+    story.append(t_row3)
+    story.append(Spacer(1, 4))
+    story.append(t_row4)
+    story.append(Spacer(1, 10))
+    story.append(t_foot)
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 # ----------------- BILL PDF INVOICE GENERATOR WITH UPI -----------------
 def generate_pdf_invoice(bill_no, party_name, start_str, end_str, bill_date, items, total_amount):
@@ -260,103 +377,6 @@ def generate_payment_pdf_receipt(rec_id, party_name, bill_no, pay_date, pay_amou
     buffer.seek(0)
     return buffer.getvalue()
 
-# ----------------- BARCODE DRAWING -----------------
-def draw_barcode(draw, x_start, y_start, text_val, width=400, height=60):
-    import random
-    random.seed(sum(ord(c) for c in text_val))
-    curr_x = x_start
-    end_x = x_start + width
-    while curr_x < end_x:
-        line_w = random.choice([3, 4, 5])
-        gap = random.choice([2, 3])
-        draw.rectangle([curr_x, y_start, curr_x + line_w, y_start + height], fill="black")
-        curr_x += line_w + gap
-
-# ----------------- CLEAN & HIGH DEFINITION RECEIPT GENERATOR -----------------
-def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type):
-    width, height = 1200, 850
-    img = Image.new("RGB", (width, height), "white")
-    draw = ImageDraw.Draw(img)
-
-    # TRUE TTF VECTOR FONT HELPERS (NO BLACK BLOTS)
-    def font(sz):
-        try:
-            return ImageFont.truetype(font_file, sz)
-        except:
-            return ImageFont.load_default()
-
-    # Outer Frame
-    draw.rectangle([10, 10, width-10, height-10], outline="black", width=4)
-
-    # Header Box
-    draw.rectangle([10, 10, width-10, 150], outline="black", width=3)
-    draw.text((25, 20), "📦 COURIER SOLUTION", fill="#002147", font=font(44))
-    draw.text((25, 88), "EXPRESS CARGO & LOGISTICS SERVICES", fill="#333333", font=font(22))
-
-    draw.line([(760, 10), (760, 150)], fill="black", width=3)
-    draw.text((770, 15), "Consignment Number", fill="black", font=font(20))
-    draw_barcode(draw, 770, 45, cons_no, width=400, height=55)
-    draw.text((820, 106), f"{cons_no}", fill="black", font=font(30))
-
-    # Row 2: Origin, Destination, Date
-    draw.rectangle([10, 150, width-10, 250], outline="black", width=3)
-    draw.line([(380, 150), (380, 250)], fill="black", width=3)
-    draw.line([(760, 150), (760, 250)], fill="black", width=3)
-
-    draw.text((20, 160), f"Origin: {origin.upper()}", fill="black", font=font(26))
-    draw.text((20, 202), f"Courier: {courier_co.upper()}", fill="blue", font=font(26))
-
-    draw.text((390, 160), "Destination:", fill="black", font=font(20))
-    draw.text((390, 192), f"{dest.upper()}", fill="black", font=font(36))
-
-    draw.text((770, 160), f"Date: {date}", fill="black", font=font(26))
-    draw.text((770, 202), f"Booking: {booking_type} ({mode})", fill="black", font=font(24))
-
-    # Row 3: Consignor & Consignee
-    draw.rectangle([10, 250, width-10, 550], outline="black", width=3)
-    draw.line([(width//2, 250), (width//2, 550)], fill="black", width=3)
-
-    # Sender Box
-    draw.rectangle([10, 250, width//2, 295], fill="#E6ECF2", outline="black", width=2)
-    draw.text((20, 260), "CONSIGNOR (FROM)", fill="black", font=font(24))
-    draw.text((20, 310), f"{sender_name.upper()}", fill="black", font=font(32))
-    draw.text((20, 375), f"Address: {sender_address}", fill="black", font=font(26))
-    draw.text((20, 465), f"City/Pin: {sender_city}", fill="black", font=font(26))
-
-    # Recipient Box
-    draw.rectangle([width//2, 250, width-10, 295], fill="#E6ECF2", outline="black", width=2)
-    draw.text((width//2 + 10, 260), "CONSIGNEE (TO)", fill="black", font=font(24))
-    draw.text((width//2 + 10, 310), f"{rec_name.upper()}", fill="black", font=font(32))
-    draw.text((width//2 + 10, 375), f"Address: {rec_address}", fill="black", font=font(26))
-    draw.text((width//2 + 10, 465), f"City/Pin: {rec_city}", fill="black", font=font(26))
-
-    # Row 4: Pcs, Weight, Amount
-    draw.rectangle([10, 550, width-10, 680], outline="black", width=3)
-    draw.rectangle([10, 550, width-10, 595], fill="#F0F4F8", outline="black", width=2)
-
-    draw.line([(280, 550), (280, 680)], fill="black", width=3)
-    draw.line([(560, 550), (560, 680)], fill="black", width=3)
-    draw.line([(880, 550), (880, 680)], fill="black", width=3)
-
-    draw.text((50, 560), "Pieces (Pcs)", fill="black", font=font(24))
-    draw.text((330, 560), "Weight (Kg)", fill="black", font=font(24))
-    draw.text((600, 560), "Total Amount (RS)", fill="black", font=font(24))
-    draw.text((900, 560), "Payment Status", fill="black", font=font(24))
-
-    draw.text((80, 618), f"{pcs} Pcs", fill="black", font=font(34))
-    draw.text((350, 618), f"{weight} Kg", fill="black", font=font(34))
-    draw.text((610, 618), f"RS {amount}/-", fill="green", font=font(34))
-    draw.text((920, 618), f"{booking_type}", fill="blue" if booking_type == "Cash" else "purple", font=font(32))
-
-    # Row 5: Footer
-    draw.text((20, 700), f"Shipment Remarks: Booking Generated via Courier Solution Management System.", fill="black", font=font(22))
-    draw.text((20, 750), "* Risk Charge Included in Gross Amt, if any. Subject to terms & conditions.", fill="#555555", font=font(18))
-
-    draw.line([(width-380, 800), (width-30, 800)], fill="black", width=3)
-    draw.text((width-360, 810), "Authorized Signatory (Courier Solution)", fill="black", font=font(20))
-
-    return img
-
 # ----------------- DASHBOARD UI -----------------
 st.title("📦 COURIER SOLUTION")
 st.caption("Express Cargo & Logistics Management System")
@@ -470,12 +490,17 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                     conn.commit()
                     st.success(f"Cash Entry Saved Successfully for Consignment: {cons_no}")
                     
-                    img = generate_exact_image(cons_no, date_entry, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Cash')
-                    st.image(img, caption=f"Receipt - {cons_no}", use_container_width=True)
+                    pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Cash')
                     
-                    buf = io.BytesIO()
-                    img.save(buf, format="PNG")
-                    st.download_button(label="🖨️ Download Receipt Image (For Print/WhatsApp)", data=buf.getvalue(), file_name=f"Receipt_{cons_no}.png", mime="image/png")
+                    # Try Converting PDF to Image for Streamlit Display
+                    try:
+                        from pdf2image import convert_from_bytes
+                        images = convert_from_bytes(pdf_bytes)
+                        st.image(images[0], caption=f"HD Receipt - {cons_no}", use_container_width=True)
+                    except:
+                        st.info("💡 PDF રસીદ સફળતાપૂર્વક બની ગઈ છે. નીચે આપેલા બટનથી HD પ્રિન્ટ ડાઉનલોડ કરો.")
+
+                    st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
                 except sqlite3.IntegrityError:
                     st.error("આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે!")
                 conn.close()
@@ -539,11 +564,15 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
 
                 if rec_data:
                     st.success("રસીદ સફળતાપૂર્વક મળી ગઈ છે!")
-                    img = generate_exact_image(rec_data[0], rec_data[1], rec_data[2], rec_data[3], rec_data[4], rec_data[5], rec_data[6], rec_data[7], rec_data[8], rec_data[9], rec_data[10], rec_data[11], rec_data[12], rec_data[13], rec_data[14], rec_data[15])
-                    st.image(img, caption=f"Receipt - {rec_data[0]}", use_container_width=True)
-                    buf = io.BytesIO()
-                    img.save(buf, format="PNG")
-                    st.download_button(label="🖨️ Download Receipt Image", data=buf.getvalue(), file_name=f"Receipt_{rec_data[0]}.png", mime="image/png")
+                    pdf_bytes = generate_hd_receipt_pdf(rec_data[0], rec_data[1], rec_data[2], rec_data[3], rec_data[4], rec_data[5], rec_data[6], rec_data[7], rec_data[8], rec_data[9], rec_data[10], rec_data[11], rec_data[12], rec_data[13], rec_data[14], rec_data[15])
+                    
+                    try:
+                        from pdf2image import convert_from_bytes
+                        images = convert_from_bytes(pdf_bytes)
+                        st.image(images[0], caption=f"HD Receipt - {rec_data[0]}", use_container_width=True)
+                    except:
+                        pass
+                    st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{rec_data[0]}.pdf", mime="application/pdf")
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
@@ -614,11 +643,15 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                         st.success(f"Credit Entry Saved for Party '{selected_party}' - Consignment: {cons_no}")
 
                         if save_print:
-                            img = generate_exact_image(cons_no, date_entry, courier_co, mode, origin, dest, selected_party, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Credit Account')
-                            st.image(img, caption=f"Credit Receipt - {cons_no}", use_container_width=True)
-                            buf = io.BytesIO()
-                            img.save(buf, format="PNG")
-                            st.download_button(label="🖨️ Download Receipt Image", data=buf.getvalue(), file_name=f"Receipt_{cons_no}.png", mime="image/png")
+                            pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, selected_party, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Credit Account')
+                            
+                            try:
+                                from pdf2image import convert_from_bytes
+                                images = convert_from_bytes(pdf_bytes)
+                                st.image(images[0], caption=f"Credit Receipt - {cons_no}", use_container_width=True)
+                            except:
+                                pass
+                            st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
                     except sqlite3.IntegrityError:
                         st.error("આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે!")
                     conn.close()
@@ -638,11 +671,15 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
 
                 if rec_data:
                     st.success("રસીદ સફળતાપૂર્વક મળી ગઈ છે!")
-                    img = generate_exact_image(rec_data[0], rec_data[1], rec_data[2], rec_data[3], rec_data[4], rec_data[5], rec_data[6], rec_data[7], rec_data[8], rec_data[9], rec_data[10], rec_data[11], rec_data[12], rec_data[13], rec_data[14], rec_data[15])
-                    st.image(img, caption=f"Receipt - {rec_data[0]}", use_container_width=True)
-                    buf = io.BytesIO()
-                    img.save(buf, format="PNG")
-                    st.download_button(label="🖨️ Download Receipt Image", data=buf.getvalue(), file_name=f"Receipt_{cons_no}.png", mime="image/png")
+                    pdf_bytes = generate_hd_receipt_pdf(rec_data[0], rec_data[1], rec_data[2], rec_data[3], rec_data[4], rec_data[5], rec_data[6], rec_data[7], rec_data[8], rec_data[9], rec_data[10], rec_data[11], rec_data[12], rec_data[13], rec_data[14], rec_data[15])
+                    
+                    try:
+                        from pdf2image import convert_from_bytes
+                        images = convert_from_bytes(pdf_bytes)
+                        st.image(images[0], caption=f"Receipt - {rec_data[0]}", use_container_width=True)
+                    except:
+                        pass
+                    st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
