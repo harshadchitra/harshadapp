@@ -43,14 +43,14 @@ def scan_label_image(image_bytes):
             extracted_cons_no = barcode.data.decode('utf-8')
             break
 
-        # 2. Text Reading (OCR for Pincode & Address text matching)
+        # 2. Text Reading (OCR for Pincode)
         gray = cv2.cvtColor(img_np, cv2.COLOR_BGR2GRAY)
         text = pytesseract.image_to_string(gray)
 
         # Indian Pincode Regex Match (6 Digits)
         pincodes = re.findall(r'\b[1-9][0-9]{5}\b', text)
         if pincodes:
-            extracted_pincode = pincodes[-1] # Usually destination pin is at the bottom/last
+            extracted_pincode = pincodes[-1]
 
     except Exception:
         pass
@@ -263,7 +263,6 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     story.append(t_row4)
     story.append(Spacer(1, 10))
 
-    # LARGE PARCEL PHOTO SECTION (CENTERED & CLEAR)
     if img_bytes:
         try:
             img_io = io.BytesIO(img_bytes)
@@ -281,7 +280,6 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
         except Exception:
             pass
 
-    # REMARKS AND SIGNATURE AT THE BOTTOM
     foot_data = [
         [
             Paragraph("<b>Shipment Remarks:</b> Booking Generated via Courier Solution.<br/><i>* Parcel Proof Photo attached above. Subject to terms.</i>", f_footer),
@@ -300,7 +298,7 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     return buffer.getvalue()
 
 # ----------------- BILL PDF INVOICE GENERATOR WITH UPI -----------------
-def generate_pdf_invoice(bill_no, party_name, start_str, end_str, bill_date, items, total_amount):
+def generate_pdf_invoice(bill_no, party_name, period_str, bill_date, items, total_amount):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
@@ -320,7 +318,7 @@ def generate_pdf_invoice(bill_no, party_name, start_str, end_str, bill_date, ite
 
     details_data = [
         [
-            Paragraph(f"<b>Invoice To:</b><br/><font size=11 color='#002147'><b>{party_name}</b></font><br/>Billing Period: {start_str} to {end_str}", normal_style),
+            Paragraph(f"<b>Invoice To:</b><br/><font size=11 color='#002147'><b>{party_name}</b></font><br/>Billing Period: {period_str}", normal_style),
             Paragraph(f"<b>Invoice No:</b> <font color='red'><b>{bill_no}</b></font><br/><b>Date:</b> {bill_date}<br/><b>Status:</b> UNPAID", normal_style)
         ]
     ]
@@ -659,13 +657,11 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
     with tab1:
         st.subheader("Cash Courier Booking")
 
-        # 📷 AUTO-FILL CAMERA SCANNER SECTION (AUTO BARCODE & PINCODE)
         st.markdown("### 📷 Auto-Scan Label (સ્માર્ટ ફોટો સ્કેનર - બારકોડ & પિનકોડ ઓટો-ફિલ)")
         uploaded_photo = st.file_uploader("પાર્સલ/લેબલનો ફોટો લો અથવા અપલોડ કરો:", type=["jpg", "jpeg", "png"], key="c_photo")
 
-        auto_cons = st.session_state.get("scanned_cons", "")
-        auto_pin = st.session_state.get("scanned_pin", "")
-
+        auto_cons = ""
+        auto_pin = ""
         if uploaded_photo:
             img_bytes_temp = uploaded_photo.getvalue()
             auto_cons, auto_pin = scan_label_image(img_bytes_temp)
@@ -961,7 +957,6 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
                 st.warning(f"⚠️ આ પાર્ટી ('{sel_party}') માટે આ સમયગાળાનું બિલ પહેલેથી જ જનરેટ થઈ ગયેલ છે!")
                 st.info(f"બિલ નંબર: **{existing_bill[0]}** | તારીખ: {existing_bill[1]} | કુલ રકમ: RS {existing_bill[2]}/-")
                 
-                # 📲 WHATSAPP BILL SHARE
                 if bill_party_mob.strip():
                     wa_bill_msg = (
                         "🧾 COURIER SOLUTION TAX INVOICE\n\n"
@@ -1006,12 +1001,11 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
                         conn.commit()
                         conn.close()
 
-                        pdf_bytes = generate_pdf_invoice(generated_bill_no, sel_party, start_str, end_str, today.strftime("%d/%m/%Y"), filtered_bill, tot_bill)
+                        pdf_bytes = generate_pdf_invoice(generated_bill_no, sel_party, f"{start_str} to {end_str}", today.strftime("%d/%m/%Y"), filtered_bill, tot_bill)
                         st.success(f"✅ પાર્ટી '{sel_party}' નું બિલ સફળતાપૂર્વક જનરેટ થઈ ગયું છે!")
                         
                         st.download_button(label="📄 Step 1: Download Digital Invoice PDF", data=pdf_bytes, file_name=f"Invoice_{generated_bill_no}_{sel_party}.pdf", mime="application/pdf")
 
-                        # 📲 WHATSAPP BILL SHARE
                         if bill_party_mob.strip():
                             wa_bill_msg = (
                                 "🧾 COURIER SOLUTION TAX INVOICE\n\n"
@@ -1049,19 +1043,52 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
         st.write("")
 
         for b in all_bills:
-            col_b1, col_b2 = st.columns([4, 1])
-            with col_b1:
-                st.write(f"📄 **Bill No: {b[1]}** | Party: {b[2]} | Date: {b[3]} | Period: {b[4]} | **Amount: RS {b[5]}/-**")
-            with col_b2:
-                if st.button("🗑️ Delete Bill", key=f"del_bill_{b[0]}"):
-                    conn = sqlite3.connect("courier_database.db")
-                    cursor = conn.cursor()
-                    cursor.execute("UPDATE receipts SET bill_no=NULL WHERE bill_no=?", (b[1],))
-                    cursor.execute("DELETE FROM bills WHERE id=?", (b[0],))
-                    conn.commit()
-                    conn.close()
-                    st.success(f"બિલ નંબર {b[1]} સફળતાપૂર્વક ડિલીટ થઈ ગયું છે!")
-                    st.rerun()
+            bill_id, b_no, b_party, b_date, b_period, b_amt = b
+            with st.expander(f"📄 Bill No: {b_no} | Party: {b_party} | Amount: RS {b_amt}/- ({b_date})"):
+                col_b1, col_b2, col_b3 = st.columns([2, 2, 1])
+                
+                # Re-fetch items for this specific bill to build printable PDF
+                conn_b = sqlite3.connect("courier_database.db")
+                cur_b = conn_b.cursor()
+                cur_b.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE bill_no=?", (b_no,))
+                items_for_b = cur_b.fetchall()
+                
+                cur_b.execute("SELECT mobile FROM parties WHERE party_name=?", (b_party,))
+                party_m_row = cur_b.fetchone()
+                p_mob_num = party_m_row[0] if party_m_row and party_m_row[0] else ""
+                conn_b.close()
+
+                with col_b1:
+                    try:
+                        b_pdf_bytes = generate_pdf_invoice(b_no, b_party, b_period, b_date, items_for_b, float(b_amt))
+                        st.download_button("🖨️ Download Invoice PDF", data=b_pdf_bytes, file_name=f"Invoice_{b_no}_{b_party}.pdf", mime="application/pdf", key=f"dl_inv_{bill_id}")
+                    except Exception:
+                        st.write("PDF Error")
+
+                with col_b2:
+                    if p_mob_num:
+                        wa_b_msg = (
+                            "🧾 COURIER SOLUTION TAX INVOICE\n\n"
+                            f"To: {b_party}\n"
+                            f"Invoice No: {b_no}\n"
+                            f"Period: {b_period}\n"
+                            f"Total Bill Amount: RS {b_amt}/-\n\n"
+                            "Pay via Google Pay/UPI: 7043721851@yapl\n\n"
+                            "Thank you for business with Courier Solution!"
+                        )
+                        wa_b_url = create_whatsapp_link(p_mob_num, wa_b_msg)
+                        st.markdown(f'<a href="{wa_b_url}" target="_blank" style="background-color:#25D366;color:white;padding:6px 12px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;">📲 WhatsApp Share</a>', unsafe_allow_html=True)
+
+                with col_b3:
+                    if st.button("🗑️ Delete Bill", key=f"del_bill_{bill_id}"):
+                        conn = sqlite3.connect("courier_database.db")
+                        cursor = conn.cursor()
+                        cursor.execute("UPDATE receipts SET bill_no=NULL WHERE bill_no=?", (b_no,))
+                        cursor.execute("DELETE FROM bills WHERE id=?", (bill_id,))
+                        conn.commit()
+                        conn.close()
+                        st.success(f"બિલ નંબર {b_no} સફળતાપૂર્વક ડિલીટ થઈ ગયું છે!")
+                        st.rerun()
     else:
         st.info("હજુ સુધી કોઈ બિલ જનરેટ થયેલ નથી.")
 
@@ -1113,7 +1140,6 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                 pay_pdf_bytes = generate_payment_pdf_receipt(rec_last_id, pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip())
                 st.download_button(label="📄 Step 1: Download Payment Receipt PDF", data=pay_pdf_bytes, file_name=f"Payment_Receipt_REC{rec_last_id:04d}_{pay_party}.pdf", mime="application/pdf")
 
-                # 📲 WHATSAPP PAYMENT RECEIPT
                 if pay_mob.strip():
                     wa_pay_msg = (
                         "💳 PAYMENT RECEIPT ACKNOWLEDGEMENT\n\n"
