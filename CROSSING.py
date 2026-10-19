@@ -217,75 +217,108 @@ def generate_payment_pdf_receipt(rec_id, party_name, bill_no, pay_date, pay_amou
     buffer.seek(0)
     return buffer.getvalue()
 
-# ----------------- HD PRINTS (BOOKING - મોટા અને આકર્ષક ફોન્ટ્સ) -----------------
+# ----------------- ડીઝીટલ બારકોડ ડ્રોઈંગ ફંકશન -----------------
+def draw_barcode(draw, x_start, y_start, text_val, width=280, height=35):
+    # બારકોડ લાઈનો દોરવી
+    import random
+    random.seed(sum(ord(c) for c in text_val))
+    curr_x = x_start
+    end_x = x_start + width
+    while curr_x < end_x:
+        line_w = random.choice([1, 2, 3, 4])
+        gap = random.choice([1, 2, 3])
+        draw.rectangle([curr_x, y_start, curr_x + line_w, y_start + height], fill="black")
+        curr_x += line_w + gap
+
+# ----------------- ANJANI RECEIPT STYLE (નમૂના મુજબ સુધારેલી રસીદ) -----------------
 def generate_exact_image(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type):
     width, height = 1200, 680
     img = Image.new("RGB", (width, height), "white")
     draw = ImageDraw.Draw(img)
 
     try:
-        font_title = ImageFont.truetype("arialbd.ttf", 46)
-        font_sub = ImageFont.truetype("arial.ttf", 22)
+        font_header_title = ImageFont.truetype("arialbd.ttf", 36)
+        font_sub = ImageFont.truetype("arial.ttf", 16)
+        font_label = ImageFont.truetype("arial.ttf", 16)
         font_bold = ImageFont.truetype("arialbd.ttf", 22)
-        font_regular = ImageFont.truetype("arial.ttf", 20)
-        font_footer = ImageFont.truetype("arial.ttf", 15)
+        font_big_bold = ImageFont.truetype("arialbd.ttf", 26)
+        font_footer = ImageFont.truetype("arial.ttf", 14)
     except:
-        font_title = font_sub = font_bold = font_regular = font_footer = ImageFont.load_default()
+        font_header_title = font_sub = font_label = font_bold = font_big_bold = font_footer = ImageFont.load_default()
 
     # મુખ્ય આઉટર બોર્ડર
-    draw.rectangle([10, 10, width-10, height-10], outline="#002147", width=4)
+    draw.rectangle([10, 10, width-10, height-10], outline="black", width=3)
 
-    # 1. ઉપરની આખી મોટી બ્લૂ હેડર પટ્ટી
-    draw.rectangle([10, 10, width-10, 110], fill="#002147")
-    draw.text((35, 20), "📦 COURIER SOLUTION", fill="white", font=font_title)
-    draw.text((35, 75), "Express Cargo & Logistics Services", fill="#E0E0E0", font=font_sub)
+    # 1. હેડર ભાગ (નમૂના જેવો - ડાબે લોગો/ટાઈટલ અને જમણે બારકોડ)
+    draw.rectangle([10, 10, width-10, 110], outline="black", width=2)
+    
+    # ડાબી બાજુ લોગો અને મોટો ટાઈટલ
+    draw.text((25, 20), "📦 COURIER SOLUTION", fill="#002147", font=font_header_title)
+    draw.text((25, 65), "EXPRESS CARGO & LOGISTICS SERVICES", fill="#333333", font=font_bold)
+    
+    # ઉભી લાઇન જમણી બાજુ બારકોડ સેક્શન માટે
+    draw.line([(820, 10), (820, 110)], fill="black", width=2)
+    
+    # જમણી બાજુ બારકોડ અને કન્સાઇનમેન્ટ નંબર
+    draw.text((830, 15), "Consignment Number", fill="black", font=font_label)
+    draw_barcode(draw, 830, 38, cons_no, width=340, height=40)
+    draw.text((880, 82), f"{cons_no}", fill="black", font=font_bold)
 
-    # 2. કન્સાઇનમેન્ટ અને કુરિયર માહિતી વાળી પટ્ટી
-    draw.rectangle([20, 120, width-20, 190], outline="#002147", width=2, fill="#F0F4F8")
-    draw.text((35, 130), f"Consignment No: {cons_no}", fill="#D9534F", font=font_bold)
-    draw.text((450, 130), f"Date: {date}", fill="black", font=font_bold)
-    draw.text((850, 130), f"Courier Co: {courier_co}", fill="#002147", font=font_bold)
-    draw.text((35, 160), f"Mode: {mode}", fill="black", font=font_regular)
-    draw.text((450, 160), f"Origin: {origin}", fill="black", font=font_regular)
-    draw.text((850, 160), f"Destination: {dest}", fill="black", font=font_regular)
+    # 2. Origin / Destination / Date / Type પટ્ટી
+    draw.rectangle([10, 110, width-10, 180], outline="black", width=2)
+    draw.line([(400, 110), (400, 180)], fill="black", width=2)
+    draw.line([(820, 110), (820, 180)], fill="black", width=2)
 
-    # 3. મોકલનાર (Sender - From)
-    draw.rectangle([20, 200, width//2 - 10, 430], outline="#002147", width=2)
-    draw.rectangle([20, 200, width//2 - 10, 240], fill="#002147")
-    draw.text((width//4 - 85, 207), "SENDER (From)", fill="white", font=font_bold)
-    draw.text((35, 255), f"Name: {sender_name}", fill="black", font=font_bold)
-    draw.text((35, 305), f"Address: {sender_address}", fill="black", font=font_regular)
-    draw.text((35, 370), f"City/Pin: {sender_city}", fill="black", font=font_regular)
+    draw.text((20, 120), f"Origin:  {origin.upper()}", fill="black", font=font_bold)
+    draw.text((20, 150), f"Courier Co:  {courier_co.upper()}", fill="blue", font=font_bold)
 
-    # 4. મેળવનાર (Recipient - To)
-    draw.rectangle([width//2 + 10, 200, width-20, 430], outline="#002147", width=2)
-    draw.rectangle([width//2 + 10, 200, width-20, 240], fill="#002147")
-    draw.text((3*width//4 - 85, 207), "RECIPIENT (To)", fill="white", font=font_bold)
-    draw.text((width//2 + 25, 255), f"Name: {rec_name}", fill="black", font=font_bold)
-    draw.text((width//2 + 25, 305), f"Address: {rec_address}", fill="black", font=font_regular)
-    draw.text((width//2 + 25, 370), f"City/Pin: {rec_city}", fill="black", font=font_regular)
+    draw.text((410, 120), f"Destination:  {dest.upper()}", fill="black", font=font_big_bold)
 
-    # 5. વજન, નંગ, અને રકમનું ટેબલ
-    draw.rectangle([20, 440, width-20, 550], outline="#002147", width=2)
-    draw.rectangle([20, 440, width-20, 480], fill="#E6ECF2")
-    draw.text((120, 448), "Weight (Kg)", fill="#002147", font=font_bold)
-    draw.text((420, 448), "Quantity (Pcs)", fill="#002147", font=font_bold)
-    draw.text((700, 448), "Total Amount (RS)", fill="#002147", font=font_bold)
-    draw.text((1000, 448), "Type", fill="#002147", font=font_bold)
+    draw.text((830, 120), f"Date: {date}", fill="black", font=font_bold)
+    draw.text((830, 150), f"Booking: {booking_type} ({mode})", fill="black", font=font_bold)
 
-    draw.line([(320, 440), (320, 550)], fill="#002147", width=2)
-    draw.line([(620, 440), (620, 550)], fill="#002147", width=2)
-    draw.line([(900, 440), (900, 550)], fill="#002147", width=2)
+    # 3. Consignor (Sender) & Consignee (Recipient) સેક્શન
+    draw.rectangle([10, 180, width-10, 420], outline="black", width=2)
+    draw.line([(width//2, 180), (width//2, 420)], fill="black", width=2)
 
-    draw.text((120, 498), f"{weight} kg", fill="black", font=font_bold)
-    draw.text((420, 498), f"{pcs} Pcs", fill="black", font=font_bold)
-    draw.text((700, 498), f"RS {amount}/-", fill="green", font=font_bold)
-    draw.text((1000, 498), f"{booking_type}", fill="blue" if booking_type == "Cash" else "purple", font=font_bold)
+    # મોકલનાર (Consignor)
+    draw.rectangle([10, 180, width//2, 215], fill="#E6ECF2", outline="black")
+    draw.text((20, 188), "Consignor (મોકલનાર)", fill="black", font=font_bold)
+    draw.text((20, 225), f"{sender_name.upper()}", fill="black", font=font_big_bold)
+    draw.text((20, 270), f"Address: {sender_address}", fill="black", font=font_bold)
+    draw.text((20, 330), f"City/Pin: {sender_city}", fill="black", font=font_bold)
 
-    # 6. ફૂટર વિગતો અને સહી (ફક્ત ટર્મ્સના ફોન્ટ નાના રાખ્યા છે)
-    draw.text((35, 580), "* Subject to terms & conditions. Goods carried at owner's risk.", fill="#555555", font=font_footer)
-    draw.line([(width-260, 615), (width-40, 615)], fill="black", width=2)
-    draw.text((width-230, 625), "Authorized Signatory", fill="black", font=font_bold)
+    # મેળવનાર (Consignee)
+    draw.rectangle([width//2, 180, width-10, 215], fill="#E6ECF2", outline="black")
+    draw.text((width//2 + 10, 188), "Consignee (મેળવનાર)", fill="black", font=font_bold)
+    draw.text((width//2 + 10, 225), f"{rec_name.upper()}", fill="black", font=font_big_bold)
+    draw.text((width//2 + 10, 270), f"Address: {rec_address}", fill="black", font=font_bold)
+    draw.text((width//2 + 10, 330), f"City/Pin: {rec_city}", fill="black", font=font_bold)
+
+    # 4. Weight, Pcs, Amount ટેબલ
+    draw.rectangle([10, 420, width-10, 520], outline="black", width=2)
+    draw.rectangle([10, 420, width-10, 455], fill="#F0F4F8", outline="black")
+
+    draw.line([(300, 420), (300, 520)], fill="black", width=2)
+    draw.line([(600, 420), (600, 520)], fill="black", width=2)
+    draw.line([(900, 420), (900, 520)], fill="black", width=2)
+
+    draw.text((80, 428), "Pieces (Pcs)", fill="black", font=font_bold)
+    draw.text((380, 428), "Weight (Kg)", fill="black", font=font_bold)
+    draw.text((680, 428), "Total Amount (RS)", fill="black", font=font_bold)
+    draw.text((980, 428), "Payment Status", fill="black", font=font_bold)
+
+    draw.text((100, 470), f"{pcs} Pcs", fill="black", font=font_big_bold)
+    draw.text((400, 470), f"{weight} Kg", fill="black", font=font_big_bold)
+    draw.text((680, 470), f"RS {amount}/-", fill="green", font=font_big_bold)
+    draw.text((950, 470), f"{booking_type}", fill="blue" if booking_type == "Cash" else "purple", font=font_big_bold)
+
+    # 5. ફૂટર વિગતો
+    draw.text((20, 540), f"Shipment Remarks: Booking Generated via Courier Solution Management System.", fill="black", font=font_label)
+    draw.text((20, 580), "* Risk Charge Included in Gross Amt, if any. Subject to terms & conditions.", fill="#555555", font=font_footer)
+
+    draw.line([(width-320, 620), (width-30, 620)], fill="black", width=2)
+    draw.text((width-280, 630), "Authorized Signatory (Courier Solution)", fill="black", font=font_bold)
 
     return img
 
@@ -592,7 +625,6 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
     if not p_list:
         st.warning("કોઈ પાર્ટી ઉમેરેલી નથી.")
     else:
-        # ઓલ પાર્ટી વિકલ્પ સાથે ડ્રોપડાઉન
         select_options = ["🌐 All Parties (બધી પાર્ટીઓ માટે એકસાથે)"] + p_list
         sel_party = st.selectbox("Select Party for Bill (બિલ બનાવવાની પાર્ટી પસંદ કરો):", select_options)
         
@@ -604,7 +636,6 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
                 
                 success_count = 0
                 for party in p_list:
-                    # ચેક કરો કે આ પાર્ટીના આ સમયગાળામાં અનબિલ એન્ટ્રી છે કે નહીં
                     cursor.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE sender_name=? AND booking_type='Credit Account' AND (bill_no IS NULL OR bill_no='') ORDER BY id DESC", (party,))
                     b_rows = cursor.fetchall()
 
@@ -622,7 +653,6 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
                             pass
 
                     if filtered_bill:
-                        # નવો બિલ નંબર બનાવો
                         cursor.execute("SELECT COUNT(*) FROM bills")
                         b_count = cursor.fetchone()[0] + 1
                         generated_bill_no = f"BILL-2026-{b_count:03d}"
@@ -845,22 +875,5 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
             for r in pay_rows:
                 col_py1, col_py2, col_py3 = st.columns([3, 1.2, 1])
                 with col_py1:
-                    st.write(f"🏢 **{r[1]}** | Bill: <span style='color:red;'><b>{r[2]}</b></span> | Date: {r[3]} | **RS {r[4]}/-** ({r[5]})", unsafe_allow_html=True)
-                    try: tot_received += float(r[4])
-                    except: pass
-                with col_py2:
-                    hist_pdf = generate_payment_pdf_receipt(r[0], r[1], r[2], r[3], r[4], r[5], r[6])
-                    st.download_button("🖨️ Receipt PDF", data=hist_pdf, file_name=f"Payment_Receipt_{r[0]}.pdf", mime="application/pdf", key=f"pdf_pay_{r[0]}")
-                with col_py3:
-                    if st.button("🗑️ Delete Pay", key=f"del_pay_{r[0]}"):
-                        conn = sqlite3.connect("courier_database.db")
-                        cursor = conn.cursor()
-                        cursor.execute("DELETE FROM party_payments WHERE id=?", (r[0],))
-                        conn.commit()
-                        conn.close()
-                        st.success("પેમેન્ટ એન્ટ્રી સફળતાપૂર્વક ડિલીટ થઈ ગઈ છે!")
-                        st.rerun()
-            st.metric("💰 Total Payment Received", f"RS {tot_received:,.2f}/-")
-        else:
-            st.info("કોઈ પેમેન્ટ રિસીવ રેકોર્ડ મળેલ નથી.")
+                    st.write(f"🏢 **{r[1]}** | Bill: <span style='color:red;'><b>{r[2]}</b></span> | Date: {r[3]} | **RS {r[4]}/-** ({r
 
