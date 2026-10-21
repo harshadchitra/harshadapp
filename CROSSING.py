@@ -1,5 +1,4 @@
 import streamlit as st
-import sqlite3
 import datetime
 import io
 import urllib.parse
@@ -11,6 +10,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.barcode import code128, qr
+import psycopg2
 
 # Optional AI / OCR Scanner Libraries
 try:
@@ -24,6 +24,15 @@ except ImportError:
 
 # Page Configuration
 st.set_page_config(page_title="Courier Solution", page_icon="📦", layout="centered")
+
+# ----------------- DB CONNECTION (SUPABASE CLOUD) -----------------
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(st.secrets["postgres"]["url"])
+        return conn
+    except Exception as e:
+        st.error(f"⚠️ ક્લાઉડ ડેટાબેઝ કનેક્શન એરર: {e}")
+        return None
 
 # ----------------- AI PHOTO AUTO-FILL SCANNER FUNCTION -----------------
 def scan_label_image(image_bytes):
@@ -67,83 +76,68 @@ def create_whatsapp_link(phone_num, msg_text):
 
 # ----------------- ડેટાબેઝ સેટઅપ -----------------
 def init_db():
-    conn = sqlite3.connect("courier_database.db")
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS receipts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            cons_no TEXT UNIQUE,
-            date TEXT,
-            courier_co TEXT,
-            mode TEXT,
-            origin TEXT,
-            dest TEXT,
-            sender_name TEXT,
-            sender_address TEXT,
-            sender_city TEXT,
-            rec_name TEXT,
-            rec_address TEXT,
-            rec_city TEXT,
-            weight TEXT,
-            pcs TEXT,
-            amount TEXT,
-            booking_type TEXT,
-            bill_no TEXT,
-            parcel_img BLOB
-        )
-    """)
+    conn = get_db_connection()
+    if conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS receipts (
+                id SERIAL PRIMARY KEY,
+                cons_no TEXT UNIQUE,
+                date TEXT,
+                courier_co TEXT,
+                mode TEXT,
+                origin TEXT,
+                dest TEXT,
+                sender_name TEXT,
+                sender_address TEXT,
+                sender_city TEXT,
+                rec_name TEXT,
+                rec_address TEXT,
+                rec_city TEXT,
+                weight TEXT,
+                pcs TEXT,
+                amount TEXT,
+                booking_type TEXT,
+                bill_no TEXT,
+                parcel_img BYTEA
+            )
+        """)
 
-    try:
-        cursor.execute("ALTER TABLE receipts ADD COLUMN bill_no TEXT")
-    except sqlite3.OperationalError:
-        pass
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS parties (
+                id SERIAL PRIMARY KEY,
+                party_name TEXT UNIQUE,
+                party_address TEXT,
+                party_city TEXT,
+                mobile TEXT
+            )
+        """)
 
-    try:
-        cursor.execute("ALTER TABLE receipts ADD COLUMN parcel_img BLOB")
-    except sqlite3.OperationalError:
-        pass
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS party_payments (
+                id SERIAL PRIMARY KEY,
+                party_name TEXT,
+                bill_no TEXT,
+                date TEXT,
+                amount TEXT,
+                pay_mode TEXT,
+                note TEXT
+            )
+        """)
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS parties (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            party_name TEXT UNIQUE,
-            party_address TEXT,
-            party_city TEXT,
-            mobile TEXT
-        )
-    """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bills (
+                id SERIAL PRIMARY KEY,
+                bill_no TEXT UNIQUE,
+                party_name TEXT,
+                bill_date TEXT,
+                period TEXT,
+                total_amount TEXT
+            )
+        """)
 
-    try:
-        cursor.execute("ALTER TABLE parties ADD COLUMN mobile TEXT")
-    except sqlite3.OperationalError:
-        pass
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS party_payments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            party_name TEXT,
-            bill_no TEXT,
-            date TEXT,
-            amount TEXT,
-            pay_mode TEXT,
-            note TEXT
-        )
-    """)
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS bills (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bill_no TEXT UNIQUE,
-            party_name TEXT,
-            bill_date TEXT,
-            period TEXT,
-            total_amount TEXT
-        )
-    """)
-
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
 
 init_db()
 
@@ -265,6 +259,8 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
 
     if img_bytes:
         try:
+            if isinstance(img_bytes, memoryview):
+                img_bytes = bytes(img_bytes)
             img_io = io.BytesIO(img_bytes)
             large_photo = RLImage(img_io, width=220, height=150)
             photo_table = Table([[large_photo]], colWidths=[545])
@@ -617,38 +613,41 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
             if not p_name.strip():
                 st.error("મહેરબાની કરીને Party Name ભરો!")
             else:
-                conn = sqlite3.connect("courier_database.db")
-                cursor = conn.cursor()
-                try:
-                    cursor.execute("INSERT INTO parties (party_name, party_address, party_city, mobile) VALUES (?, ?, ?, ?)", (p_name.strip(), p_addr.strip(), p_city.strip(), p_mob.strip()))
-                    conn.commit()
-                    st.success(f"પાર્ટી '{p_name}' સફળતાપૂર્વક ઉમેરાઈ ગઈ છે!")
-                except sqlite3.IntegrityError:
-                    st.error("આ નામની પાર્ટી પહેલેથી જ અસ્તિત્વમાં છે!")
-                conn.close()
+                conn = get_db_connection()
+                if conn:
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute("INSERT INTO parties (party_name, party_address, party_city, mobile) VALUES (%s, %s, %s, %s)", (p_name.strip(), p_addr.strip(), p_city.strip(), p_mob.strip()))
+                        conn.commit()
+                        st.success(f"પાર્ટી '{p_name}' સફળતાપૂર્વક ઉમેરાઈ ગઈ છે!")
+                    except Exception:
+                        st.error("આ નામની પાર્ટી પહેલેથી જ અસ્તિત્વમાં છે!")
+                    conn.close()
 
     st.markdown("---")
     st.write("### 🏢 સેવ થયેલી પાર્ટીઓની યાદી & ડિલીટ:")
-    conn = sqlite3.connect("courier_database.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, party_name, party_address, party_city, mobile FROM parties ORDER BY party_name ASC")
-    p_rows = cursor.fetchall()
-    conn.close()
-    
-    if p_rows:
-        for r in p_rows:
-            col_p1, col_p2 = st.columns([4, 1])
-            with col_p1:
-                st.write(f"🏢 **{r[1]}** | Mobile: {r[4]} | {r[2]} ({r[3]})")
-            with col_p2:
-                if st.button("🗑️ Delete", key=f"del_party_{r[0]}"):
-                    conn = sqlite3.connect("courier_database.db")
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM parties WHERE id=?", (r[0],))
-                    conn.commit()
-                    conn.close()
-                    st.success(f"પાર્ટી '{r[1]}' ડિલીટ થઈ ગઈ છે!")
-                    st.rerun()
+    conn = get_db_connection()
+    if conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, party_name, party_address, party_city, mobile FROM parties ORDER BY party_name ASC")
+        p_rows = cursor.fetchall()
+        conn.close()
+        
+        if p_rows:
+            for r in p_rows:
+                col_p1, col_p2 = st.columns([4, 1])
+                with col_p1:
+                    st.write(f"🏢 **{r[1]}** | Mobile: {r[4]} | {r[2]} ({r[3]})")
+                with col_p2:
+                    if st.button("🗑️ Delete", key=f"del_party_{r[0]}"):
+                        conn_del = get_db_connection()
+                        if conn_del:
+                            cursor_del = conn_del.cursor()
+                            cursor_del.execute("DELETE FROM parties WHERE id=%s", (r[0],))
+                            conn_del.commit()
+                            conn_del.close()
+                            st.success(f"પાર્ટી '{r[1]}' ડિલીટ થઈ ગઈ છે!")
+                            st.rerun()
 
 # ----------------- ૨. CASH BOOKING -----------------
 elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)":
@@ -696,79 +695,83 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                 st.error("મહેરબાની કરીને Consignment No, Sender Name, Recipient Name અને Amount ભરો!")
             else:
                 img_bytes = uploaded_photo.getvalue() if uploaded_photo else None
-                conn = sqlite3.connect("courier_database.db")
-                cursor = conn.cursor()
-                try:
-                    cursor.execute("""
-                        INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, parcel_img)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), sender_name.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Cash', img_bytes))
-                    conn.commit()
-                    st.success(f"Cash Entry Saved Successfully for Consignment: {cons_no}")
-                    
-                    pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Cash', img_bytes)
-                    
-                    st.download_button(label="📄 Step 1: Download Printable PDF Receipt", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
+                conn = get_db_connection()
+                if conn:
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute("""
+                            INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, parcel_img)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), sender_name.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Cash', img_bytes))
+                        conn.commit()
+                        st.success(f"Cash Entry Saved Successfully for Consignment: {cons_no}")
+                        
+                        pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Cash', img_bytes)
+                        
+                        st.download_button(label="📄 Step 1: Download Printable PDF Receipt", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
 
-                    if c_whatsapp_num.strip():
-                        wa_msg = (
-                            "📦 COURIER SOLUTION RECEIPT\n\n"
-                            f"Hello {sender_name},\n"
-                            "Your courier booking is confirmed!\n\n"
-                            f"Consignment No: {cons_no}\n"
-                            f"Date: {date_entry}\n"
-                            f"Courier: {courier_co}\n"
-                            f"To: {rec_name} ({dest})\n"
-                            f"Weight: {weight} Kg ({pcs} Pcs)\n"
-                            f"Amount Paid: RS {amount}/-\n\n"
-                            "Thank you for choosing Courier Solution!"
-                        )
-                        wa_url = create_whatsapp_link(c_whatsapp_num.strip(), wa_msg)
-                        st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Step 2: Send Confirmation on WhatsApp</a>', unsafe_allow_html=True)
+                        if c_whatsapp_num.strip():
+                            wa_msg = (
+                                "📦 COURIER SOLUTION RECEIPT\n\n"
+                                f"Hello {sender_name},\n"
+                                "Your courier booking is confirmed!\n\n"
+                                f"Consignment No: {cons_no}\n"
+                                f"Date: {date_entry}\n"
+                                f"Courier: {courier_co}\n"
+                                f"To: {rec_name} ({dest})\n"
+                                f"Weight: {weight} Kg ({pcs} Pcs)\n"
+                                f"Amount Paid: RS {amount}/-\n\n"
+                                "Thank you for choosing Courier Solution!"
+                            )
+                            wa_url = create_whatsapp_link(c_whatsapp_num.strip(), wa_msg)
+                            st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Step 2: Send Confirmation on WhatsApp</a>', unsafe_allow_html=True)
 
-                except sqlite3.IntegrityError:
-                    st.error("આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે!")
-                conn.close()
+                    except Exception as ex:
+                        st.error(f"આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે અથવા ભૂલ છે: {ex}")
+                    conn.close()
 
     with tab2:
         st.subheader("📜 Cash Booking Records & Collection History")
-        conn = sqlite3.connect("courier_database.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, cons_no, date, sender_name, rec_name, amount FROM receipts WHERE booking_type='Cash' ORDER BY id DESC")
-        cash_rows = cursor.fetchall()
-        conn.close()
+        conn = get_db_connection()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, cons_no, date, sender_name, rec_name, amount FROM receipts WHERE booking_type='Cash' ORDER BY id DESC")
+            cash_rows = cursor.fetchall()
+            conn.close()
 
-        for r in cash_rows:
-            col_c1, col_c2 = st.columns([4, 1])
-            with col_c1:
-                st.write(f"🧾 **Cons: {r[1]}** | Date: {r[2]} | From: {r[3]} ➔ To: {r[4]} | **Amount: RS {r[5]}/-**")
-            with col_c2:
-                if st.button("🗑️ Delete", key=f"del_cash_{r[0]}"):
-                    conn = sqlite3.connect("courier_database.db")
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM receipts WHERE id=?", (r[0],))
-                    conn.commit()
-                    conn.close()
-                    st.success(f"Consignment {r[1]} ડિલીટ થઈ ગયું છે!")
-                    st.rerun()
+            for r in cash_rows:
+                col_c1, col_c2 = st.columns([4, 1])
+                with col_c1:
+                    st.write(f"🧾 **Cons: {r[1]}** | Date: {r[2]} | From: {r[3]} ➔ To: {r[4]} | **Amount: RS {r[5]}/-**")
+                with col_c2:
+                    if st.button("🗑️ Delete", key=f"del_cash_{r[0]}"):
+                        conn_del = get_db_connection()
+                        if conn_del:
+                            cursor_del = conn_del.cursor()
+                            cursor_del.execute("DELETE FROM receipts WHERE id=%s", (r[0],))
+                            conn_del.commit()
+                            conn_del.close()
+                            st.success(f"Consignment {r[1]} ડિલીટ થઈ ગયું છે!")
+                            st.rerun()
 
     with tab3:
         st.subheader("🖨️ Re-Print / View Receipt by Consignment No")
         search_cons = st.text_input("Enter Consignment No to Print:")
         if st.button("🔍 Search & Print Receipt", type="primary"):
             if search_cons.strip():
-                conn = sqlite3.connect("courier_database.db")
-                cursor = conn.cursor()
-                cursor.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, parcel_img FROM receipts WHERE cons_no=?", (search_cons.strip(),))
-                rec_data = cursor.fetchone()
-                conn.close()
+                conn = get_db_connection()
+                if conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, parcel_img FROM receipts WHERE cons_no=%s", (search_cons.strip(),))
+                    rec_data = cursor.fetchone()
+                    conn.close()
 
-                if rec_data:
-                    st.success("રસીદ સફળતાપૂર્વક મળી ગઈ છે!")
-                    pdf_bytes = generate_hd_receipt_pdf(rec_data[0], rec_data[1], rec_data[2], rec_data[3], rec_data[4], rec_data[5], rec_data[6], rec_data[7], rec_data[8], rec_data[9], rec_data[10], rec_data[11], rec_data[12], rec_data[13], rec_data[14], rec_data[15], rec_data[16])
-                    st.download_button(label="🖨️ Download Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{rec_data[0]}.pdf", mime="application/pdf")
-                else:
-                    st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
+                    if rec_data:
+                        st.success("રસીદ સફળતાપૂર્વક મળી ગઈ છે!")
+                        pdf_bytes = generate_hd_receipt_pdf(rec_data[0], rec_data[1], rec_data[2], rec_data[3], rec_data[4], rec_data[5], rec_data[6], rec_data[7], rec_data[8], rec_data[9], rec_data[10], rec_data[11], rec_data[12], rec_data[13], rec_data[14], rec_data[15], rec_data[16])
+                        st.download_button(label="🖨️ Download Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{rec_data[0]}.pdf", mime="application/pdf")
+                    else:
+                        st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
 # ----------------- ૩. CREDIT ACCOUNT BOOKING -----------------
 elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)":
@@ -776,13 +779,14 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
 
     with tab_cr1:
         st.subheader("Credit Account Courier Booking")
-        conn = sqlite3.connect("courier_database.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT party_name, party_address, party_city, mobile FROM parties ORDER BY party_name ASC")
-        parties_data = cursor.fetchall()
-        conn.close()
-
-        party_names = [r[0] for r in parties_data]
+        conn = get_db_connection()
+        party_names = []
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT party_name, party_address, party_city, mobile FROM parties ORDER BY party_name ASC")
+            parties_data = cursor.fetchall()
+            conn.close()
+            party_names = [r[0] for r in parties_data]
 
         if not party_names:
             st.warning("⚠️ પહેલા 'Add Account Party' પસંદ કરીને પાર્ટી ઉમેરો!")
@@ -821,82 +825,88 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                     st.error("મહેરબાની કરીને બધી માહિતી ભરો!")
                 else:
                     cr_img_bytes = cr_uploaded_photo.getvalue() if cr_uploaded_photo else None
-                    conn = sqlite3.connect("courier_database.db")
-                    cursor = conn.cursor()
-                    try:
-                        cursor.execute("""
-                            INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, parcel_img)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), selected_party.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Credit Account', cr_img_bytes))
-                        conn.commit()
-                        st.success(f"Credit Entry Saved for '{selected_party}'")
+                    conn = get_db_connection()
+                    if conn:
+                        cursor = conn.cursor()
+                        try:
+                            cursor.execute("""
+                                INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, parcel_img)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            """, (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), selected_party.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Credit Account', cr_img_bytes))
+                            conn.commit()
+                            st.success(f"Credit Entry Saved for '{selected_party}'")
 
-                        pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, selected_party, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Credit Account', cr_img_bytes)
-                        st.download_button(label="🖨️ Download Credit Receipt PDF", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
+                            pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, selected_party, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Credit Account', cr_img_bytes)
+                            st.download_button(label="🖨️ Download Credit Receipt PDF", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
 
-                    except sqlite3.IntegrityError:
-                        st.error("આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે!")
-                    conn.close()
+                        except Exception:
+                            st.error("આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે!")
+                        conn.close()
 
     with tab_cr2:
         st.subheader("🖨️ Re-Print Credit Receipt by Consignment No")
         search_cr_cons = st.text_input("Enter Consignment No to Print (કન્સાઇનમેન્ટ નંબર નાખો):", key="search_cr")
         if st.button("🔍 Search & Print Credit Receipt", type="primary"):
             if search_cr_cons.strip():
-                conn = sqlite3.connect("courier_database.db")
-                cursor = conn.cursor()
-                cursor.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, parcel_img FROM receipts WHERE cons_no=?", (search_cr_cons.strip(),))
-                rec_data = cursor.fetchone()
-                conn.close()
+                conn = get_db_connection()
+                if conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, parcel_img FROM receipts WHERE cons_no=%s", (search_cr_cons.strip(),))
+                    rec_data = cursor.fetchone()
+                    conn.close()
 
-                if rec_data:
-                    st.success("રસીદ સફળતાપૂર્વક મળી ગઈ છે!")
-                    pdf_bytes = generate_hd_receipt_pdf(rec_data[0], rec_data[1], rec_data[2], rec_data[3], rec_data[4], rec_data[5], rec_data[6], rec_data[7], rec_data[8], rec_data[9], rec_data[10], rec_data[11], rec_data[12], rec_data[13], rec_data[14], rec_data[15], rec_data[16])
-                    st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{search_cr_cons}.pdf", mime="application/pdf")
-                else:
-                    st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
+                    if rec_data:
+                        st.success("રસીદ સફળતાપૂર્વક મળી ગઈ છે!")
+                        pdf_bytes = generate_hd_receipt_pdf(rec_data[0], rec_data[1], rec_data[2], rec_data[3], rec_data[4], rec_data[5], rec_data[6], rec_data[7], rec_data[8], rec_data[9], rec_data[10], rec_data[11], rec_data[12], rec_data[13], rec_data[14], rec_data[15], rec_data[16])
+                        st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{search_cr_cons}.pdf", mime="application/pdf")
+                    else:
+                        st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
     with tab_cr3:
         st.subheader("📜 View Credit Account Bookings & Edit/Delete")
-        conn = sqlite3.connect("courier_database.db")
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, cons_no, date, sender_name, rec_name, dest, weight, amount, bill_no, courier_co, mode, origin, sender_address, sender_city, rec_address, rec_city, pcs, parcel_img FROM receipts WHERE booking_type='Credit Account' ORDER BY id DESC")
-        cr_all_rows = cursor.fetchall()
-        conn.close()
+        conn = get_db_connection()
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, cons_no, date, sender_name, rec_name, dest, weight, amount, bill_no, courier_co, mode, origin, sender_address, sender_city, rec_address, rec_city, pcs, parcel_img FROM receipts WHERE booking_type='Credit Account' ORDER BY id DESC")
+            cr_all_rows = cursor.fetchall()
+            conn.close()
 
-        if cr_all_rows:
-            for r in cr_all_rows:
-                rec_id, cons, r_date, party, recip, destination, wt, amt, b_no, c_co, c_mode, orig, s_addr, s_city, r_addr, r_city, pcs, p_img = r
-                b_status = f" (Bill: {b_no})" if b_no else " (Unbilled)"
-                with st.expander(f"🧾 Cons: {cons} | Party: {party} | Date: {r_date} | RS {amt}/-{b_status}"):
-                    col_e1, col_e2 = st.columns(2)
-                    with col_e1:
-                        st.write(f"**Recipient:** {recip} ({destination})")
-                        st.write(f"**Courier:** {c_co} | **Mode:** {c_mode}")
-                        st.write(f"**Weight:** {wt} Kg | **Pieces:** {pcs}")
-                    with col_e2:
-                        pdf_b = generate_hd_receipt_pdf(cons, r_date, c_co, c_mode, orig, destination, party, s_addr, s_city, recip, r_addr, r_city, wt, pcs, amt, 'Credit Account', p_img)
-                        st.download_button("🖨️ Download Receipt PDF", data=pdf_b, file_name=f"Receipt_{cons}.pdf", mime="application/pdf", key=f"dl_pdf_{rec_id}")
+            if cr_all_rows:
+                for r in cr_all_rows:
+                    rec_id, cons, r_date, party, recip, destination, wt, amt, b_no, c_co, c_mode, orig, s_addr, s_city, r_addr, r_city, pcs, p_img = r
+                    b_status = f" (Bill: {b_no})" if b_no else " (Unbilled)"
+                    with st.expander(f"🧾 Cons: {cons} | Party: {party} | Date: {r_date} | RS {amt}/-{b_status}"):
+                        col_e1, col_e2 = st.columns(2)
+                        with col_e1:
+                            st.write(f"**Recipient:** {recip} ({destination})")
+                            st.write(f"**Courier:** {c_co} | **Mode:** {c_mode}")
+                            st.write(f"**Weight:** {wt} Kg | **Pieces:** {pcs}")
+                        with col_e2:
+                            pdf_b = generate_hd_receipt_pdf(cons, r_date, c_co, c_mode, orig, destination, party, s_addr, s_city, recip, r_addr, r_city, wt, pcs, amt, 'Credit Account', p_img)
+                            st.download_button("🖨️ Download Receipt PDF", data=pdf_b, file_name=f"Receipt_{cons}.pdf", mime="application/pdf", key=f"dl_pdf_{rec_id}")
 
-                    if st.button(f"🗑️ Delete Entry ({cons})", key=f"del_cr_{rec_id}"):
-                        conn = sqlite3.connect("courier_database.db")
-                        cursor = conn.cursor()
-                        cursor.execute("DELETE FROM receipts WHERE id=?", (rec_id,))
-                        conn.commit()
-                        conn.close()
-                        st.success(f"Consignment {cons} સફળતાપૂર્વક ડિલીટ થઈ ગયું છે!")
-                        st.rerun()
+                        if st.button(f"🗑️ Delete Entry ({cons})", key=f"del_cr_{rec_id}"):
+                            conn_del = get_db_connection()
+                            if conn_del:
+                                cursor_del = conn_del.cursor()
+                                cursor_del.execute("DELETE FROM receipts WHERE id=%s", (rec_id,))
+                                conn_del.commit()
+                                conn_del.close()
+                                st.success(f"Consignment {cons} સફળતાપૂર્વક ડિલીટ થઈ ગયું છે!")
+                                st.rerun()
 
 # ----------------- ૪. DIGITAL MONTHLY BILLING -----------------
 elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
     st.subheader("📊 Party Digital PDF Invoice Generator & WhatsApp Share")
     st.info(f"📅 પસંદ કરેલ બિલિંગ સમયગાળો: **{start_str}** થી **{end_str}**")
 
-    conn = sqlite3.connect("courier_database.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT party_name, mobile FROM parties ORDER BY party_name ASC")
-    p_data = cursor.fetchall()
-    conn.close()
+    conn = get_db_connection()
+    p_data = []
+    if conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT party_name, mobile FROM parties ORDER BY party_name ASC")
+        p_data = cursor.fetchall()
+        conn.close()
 
     p_list = [r[0] for r in p_data]
 
@@ -917,41 +927,44 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
 
         if sel_party == "🌐 All Parties (બધી પાર્ટીઓ માટે એકસાથે)":
             if st.button("🚀 Generate All Parties Bills (બધી પાર્ટીના બિલ બનાવો)", type="primary"):
-                conn = sqlite3.connect("courier_database.db")
-                cursor = conn.cursor()
-                success_count = 0
-                for party in p_list:
-                    cursor.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE sender_name=? AND booking_type='Credit Account' AND (bill_no IS NULL OR bill_no='') ORDER BY id DESC", (party,))
-                    b_rows = cursor.fetchall()
+                conn = get_db_connection()
+                if conn:
+                    cursor = conn.cursor()
+                    success_count = 0
+                    for party in p_list:
+                        cursor.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE sender_name=%s AND booking_type='Credit Account' AND (bill_no IS NULL OR bill_no='') ORDER BY id DESC", (party,))
+                        b_rows = cursor.fetchall()
 
-                    filtered_bill = []
-                    tot_bill = 0
-                    for r in b_rows:
-                        try:
-                            if start_date <= datetime.datetime.strptime(r[2], "%d/%m/%Y").date() <= end_date:
-                                filtered_bill.append(r)
-                                tot_bill += float(r[7])
-                        except: pass
+                        filtered_bill = []
+                        tot_bill = 0
+                        for r in b_rows:
+                            try:
+                                if start_date <= datetime.datetime.strptime(r[2], "%d/%m/%Y").date() <= end_date:
+                                    filtered_bill.append(r)
+                                    tot_bill += float(r[7])
+                            except: pass
 
-                    if filtered_bill:
-                        cursor.execute("SELECT COUNT(*) FROM bills")
-                        b_count = cursor.fetchone()[0] + 1
-                        generated_bill_no = f"BILL-2026-{b_count:03d}"
-                        cursor.execute("INSERT INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (?, ?, ?, ?, ?)",
-                                      (generated_bill_no, party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
-                        for item in filtered_bill:
-                            cursor.execute("UPDATE receipts SET bill_no=? WHERE id=?", (generated_bill_no, item[0]))
-                        conn.commit()
-                        success_count += 1
-                conn.close()
-                st.success(f"✅ કુલ {success_count} પાર્ટીઓ માટે નવા બિલ સફળતાપૂર્વક જનરેટ થઈ ગયા છે!")
-                st.rerun()
+                        if filtered_bill:
+                            cursor.execute("SELECT COUNT(*) FROM bills")
+                            b_count = cursor.fetchone()[0] + 1
+                            generated_bill_no = f"BILL-2026-{b_count:03d}"
+                            cursor.execute("INSERT INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (%s, %s, %s, %s, %s)",
+                                          (generated_bill_no, party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
+                            for item in filtered_bill:
+                                cursor.execute("UPDATE receipts SET bill_no=%s WHERE id=%s", (generated_bill_no, item[0]))
+                            conn.commit()
+                            success_count += 1
+                    conn.close()
+                    st.success(f"✅ કુલ {success_count} પાર્ટીઓ માટે નવા બિલ સફળતાપૂર્વક જનરેટ થઈ ગયા છે!")
+                    st.rerun()
         else:
-            conn = sqlite3.connect("courier_database.db")
-            cursor = conn.cursor()
-            cursor.execute("SELECT bill_no, bill_date, total_amount FROM bills WHERE party_name=? AND period=?", (sel_party, f"{start_str} to {end_str}"))
-            existing_bill = cursor.fetchone()
-            conn.close()
+            conn = get_db_connection()
+            existing_bill = None
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT bill_no, bill_date, total_amount FROM bills WHERE party_name=%s AND period=%s", (sel_party, f"{start_str} to {end_str}"))
+                existing_bill = cursor.fetchone()
+                conn.close()
 
             if existing_bill:
                 st.warning(f"⚠️ આ પાર્ટી ('{sel_party}') માટે આ સમયગાળાનું બિલ પહેલેથી જ જનરેટ થઈ ગયેલ છે!")
@@ -971,65 +984,70 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
                     st.markdown(f'<a href="{wa_bill_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-bottom:15px;">📲 Share Bill Details on WhatsApp</a>', unsafe_allow_html=True)
 
             else:
-                conn_temp = sqlite3.connect("courier_database.db")
-                cur_temp = conn_temp.cursor()
-                cur_temp.execute("SELECT COUNT(*) FROM bills")
-                b_count = cur_temp.fetchone()[0] + 1
-                conn_temp.close()
+                conn_temp = get_db_connection()
+                b_count = 1
+                if conn_temp:
+                    cur_temp = conn_temp.cursor()
+                    cur_temp.execute("SELECT COUNT(*) FROM bills")
+                    b_count = cur_temp.fetchone()[0] + 1
+                    conn_temp.close()
                 generated_bill_no = f"BILL-2026-{b_count:03d}"
 
                 if st.button("📄 Generate & Create Digital PDF Invoice", type="primary"):
-                    conn = sqlite3.connect("courier_database.db")
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE sender_name=? AND booking_type='Credit Account' AND (bill_no IS NULL OR bill_no='') ORDER BY id DESC", (sel_party,))
-                    b_rows = cursor.fetchall()
+                    conn = get_db_connection()
+                    if conn:
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE sender_name=%s AND booking_type='Credit Account' AND (bill_no IS NULL OR bill_no='') ORDER BY id DESC", (sel_party,))
+                        b_rows = cursor.fetchall()
 
-                    filtered_bill = []
-                    tot_bill = 0
-                    for r in b_rows:
-                        try:
-                            if start_date <= datetime.datetime.strptime(r[2], "%d/%m/%Y").date() <= end_date:
-                                filtered_bill.append(r)
-                                tot_bill += float(r[7])
-                        except: pass
+                        filtered_bill = []
+                        tot_bill = 0
+                        for r in b_rows:
+                            try:
+                                if start_date <= datetime.datetime.strptime(r[2], "%d/%m/%Y").date() <= end_date:
+                                    filtered_bill.append(r)
+                                    tot_bill += float(r[7])
+                            except: pass
 
-                    if filtered_bill:
-                        cursor.execute("INSERT INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (?, ?, ?, ?, ?)",
-                                      (generated_bill_no, sel_party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
-                        for item in filtered_bill:
-                            cursor.execute("UPDATE receipts SET bill_no=? WHERE id=?", (generated_bill_no, item[0]))
-                        conn.commit()
-                        conn.close()
+                        if filtered_bill:
+                            cursor.execute("INSERT INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (%s, %s, %s, %s, %s)",
+                                          (generated_bill_no, sel_party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
+                            for item in filtered_bill:
+                                cursor.execute("UPDATE receipts SET bill_no=%s WHERE id=%s", (generated_bill_no, item[0]))
+                            conn.commit()
+                            conn.close()
 
-                        pdf_bytes = generate_pdf_invoice(generated_bill_no, sel_party, f"{start_str} to {end_str}", today.strftime("%d/%m/%Y"), filtered_bill, tot_bill)
-                        st.success(f"✅ પાર્ટી '{sel_party}' નું બિલ સફળતાપૂર્વક જનરેટ થઈ ગયું છે!")
-                        
-                        st.download_button(label="📄 Step 1: Download Digital Invoice PDF", data=pdf_bytes, file_name=f"Invoice_{generated_bill_no}_{sel_party}.pdf", mime="application/pdf")
+                            pdf_bytes = generate_pdf_invoice(generated_bill_no, sel_party, f"{start_str} to {end_str}", today.strftime("%d/%m/%Y"), filtered_bill, tot_bill)
+                            st.success(f"✅ પાર્ટી '{sel_party}' નું બિલ સફળતાપૂર્વક જનરેટ થઈ ગયું છે!")
+                            
+                            st.download_button(label="📄 Step 1: Download Digital Invoice PDF", data=pdf_bytes, file_name=f"Invoice_{generated_bill_no}_{sel_party}.pdf", mime="application/pdf")
 
-                        if bill_party_mob.strip():
-                            wa_bill_msg = (
-                                "🧾 COURIER SOLUTION TAX INVOICE\n\n"
-                                f"To: {sel_party}\n"
-                                f"Invoice No: {generated_bill_no}\n"
-                                f"Period: {start_str} to {end_str}\n"
-                                f"Total Bill Amount: RS {tot_bill:,.2f}/-\n\n"
-                                "Pay via Google Pay/UPI: 7043721851@yapl\n\n"
-                                "Thank you for business with Courier Solution!"
-                            )
-                            wa_bill_url = create_whatsapp_link(bill_party_mob.strip(), wa_bill_msg)
-                            st.markdown(f'<a href="{wa_bill_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Step 2: Share Bill Details on WhatsApp</a>', unsafe_allow_html=True)
-                    else:
-                        conn.close()
-                        st.info("કોઈ અનબિલ એન્ટ્રી મળી નથી.")
+                            if bill_party_mob.strip():
+                                wa_bill_msg = (
+                                    "🧾 COURIER SOLUTION TAX INVOICE\n\n"
+                                    f"To: {sel_party}\n"
+                                    f"Invoice No: {generated_bill_no}\n"
+                                    f"Period: {start_str} to {end_str}\n"
+                                    f"Total Bill Amount: RS {tot_bill:,.2f}/-\n\n"
+                                    "Pay via Google Pay/UPI: 7043721851@yapl\n\n"
+                                    "Thank you for business with Courier Solution!"
+                                )
+                                wa_bill_url = create_whatsapp_link(bill_party_mob.strip(), wa_bill_msg)
+                                st.markdown(f'<a href="{wa_bill_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Step 2: Share Bill Details on WhatsApp</a>', unsafe_allow_html=True)
+                        else:
+                            conn.close()
+                            st.info("કોઈ અનબિલ એન્ટ્રી મળી નથી.")
 
     st.markdown("---")
     st.subheader("📜 Generated Bills History & Delete")
     
-    conn = sqlite3.connect("courier_database.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, bill_no, party_name, bill_date, period, total_amount FROM bills ORDER BY id DESC")
-    all_bills = cursor.fetchall()
-    conn.close()
+    conn = get_db_connection()
+    all_bills = []
+    if conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, bill_no, party_name, bill_date, period, total_amount FROM bills ORDER BY id DESC")
+        all_bills = cursor.fetchall()
+        conn.close()
 
     if all_bills:
         summary_pdf_bytes = generate_bills_summary_pdf(all_bills, f"{start_str} to {end_str}")
@@ -1047,16 +1065,18 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
             with st.expander(f"📄 Bill No: {b_no} | Party: {b_party} | Amount: RS {b_amt}/- ({b_date})"):
                 col_b1, col_b2, col_b3 = st.columns([2, 2, 1])
                 
-                # Re-fetch items for this specific bill to build printable PDF
-                conn_b = sqlite3.connect("courier_database.db")
-                cur_b = conn_b.cursor()
-                cur_b.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE bill_no=?", (b_no,))
-                items_for_b = cur_b.fetchall()
-                
-                cur_b.execute("SELECT mobile FROM parties WHERE party_name=?", (b_party,))
-                party_m_row = cur_b.fetchone()
-                p_mob_num = party_m_row[0] if party_m_row and party_m_row[0] else ""
-                conn_b.close()
+                conn_b = get_db_connection()
+                items_for_b = []
+                p_mob_num = ""
+                if conn_b:
+                    cur_b = conn_b.cursor()
+                    cur_b.execute("SELECT id, cons_no, date, courier_co, dest, rec_name, weight, amount FROM receipts WHERE bill_no=%s", (b_no,))
+                    items_for_b = cur_b.fetchall()
+                    
+                    cur_b.execute("SELECT mobile FROM parties WHERE party_name=%s", (b_party,))
+                    party_m_row = cur_b.fetchone()
+                    p_mob_num = party_m_row[0] if party_m_row and party_m_row[0] else ""
+                    conn_b.close()
 
                 with col_b1:
                     try:
@@ -1081,14 +1101,15 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
 
                 with col_b3:
                     if st.button("🗑️ Delete Bill", key=f"del_bill_{bill_id}"):
-                        conn = sqlite3.connect("courier_database.db")
-                        cursor = conn.cursor()
-                        cursor.execute("UPDATE receipts SET bill_no=NULL WHERE bill_no=?", (b_no,))
-                        cursor.execute("DELETE FROM bills WHERE id=?", (bill_id,))
-                        conn.commit()
-                        conn.close()
-                        st.success(f"બિલ નંબર {b_no} સફળતાપૂર્વક ડિલીટ થઈ ગયું છે!")
-                        st.rerun()
+                        conn_del = get_db_connection()
+                        if conn_del:
+                            cursor_del = conn_del.cursor()
+                            cursor_del.execute("UPDATE receipts SET bill_no=NULL WHERE bill_no=%s", (b_no,))
+                            cursor_del.execute("DELETE FROM bills WHERE id=%s", (bill_id,))
+                            conn_del.commit()
+                            conn_del.close()
+                            st.success(f"બિલ નંબર {b_no} સફળતાપૂર્વક ડિલીટ થઈ ગયું છે!")
+                            st.rerun()
     else:
         st.info("હજુ સુધી કોઈ બિલ જનરેટ થયેલ નથી.")
 
@@ -1096,15 +1117,18 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
 elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & રસીદ)":
     st.subheader("💳 Party Payment Receive & WhatsApp Receipt")
     
-    conn = sqlite3.connect("courier_database.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT party_name, mobile FROM parties ORDER BY party_name ASC")
-    p_data = cursor.fetchall()
-    p_list = [r[0] for r in p_data]
-    
-    cursor.execute("SELECT bill_no, party_name, total_amount FROM bills ORDER BY id DESC")
-    b_list = cursor.fetchall()
-    conn.close()
+    conn = get_db_connection()
+    p_list = []
+    b_list = []
+    if conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT party_name, mobile FROM parties ORDER BY party_name ASC")
+        p_data = cursor.fetchall()
+        p_list = [r[0] for r in p_data]
+        
+        cursor.execute("SELECT bill_no, party_name, total_amount FROM bills ORDER BY id DESC")
+        b_list = cursor.fetchall()
+        conn.close()
 
     bill_options = ["-- Select Bill No (બિલ નં પસંદ કરો) --"] + [f"{b[0]} | {b[1]} | RS {b[2]}/-" for b in b_list]
 
@@ -1127,41 +1151,44 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                 st.error("મહેરબાની કરીને રકમ ભરો!")
             else:
                 target_bill_no = selected_bill_opt.split(" | ")[0] if "-- Select" not in selected_bill_opt else "DIRECT"
-                conn = sqlite3.connect("courier_database.db")
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO party_payments (party_name, bill_no, date, amount, pay_mode, note) VALUES (?, ?, ?, ?, ?, ?)",
-                              (pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip()))
-                rec_last_id = cursor.lastrowid
-                conn.commit()
-                conn.close()
+                conn = get_db_connection()
+                if conn:
+                    cursor = conn.cursor()
+                    cursor.execute("INSERT INTO party_payments (party_name, bill_no, date, amount, pay_mode, note) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                                  (pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip()))
+                    rec_last_id = cursor.fetchone()[0]
+                    conn.commit()
+                    conn.close()
 
-                st.success(f"✅ પાર્ટી '{pay_party}' ના RS {pay_amount}/- જમા થઈ ગયા છે!")
+                    st.success(f"✅ પાર્ટી '{pay_party}' ના RS {pay_amount}/- જમા થઈ ગયા છે!")
 
-                pay_pdf_bytes = generate_payment_pdf_receipt(rec_last_id, pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip())
-                st.download_button(label="📄 Step 1: Download Payment Receipt PDF", data=pay_pdf_bytes, file_name=f"Payment_Receipt_REC{rec_last_id:04d}_{pay_party}.pdf", mime="application/pdf")
+                    pay_pdf_bytes = generate_payment_pdf_receipt(rec_last_id, pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip())
+                    st.download_button(label="📄 Step 1: Download Payment Receipt PDF", data=pay_pdf_bytes, file_name=f"Payment_Receipt_REC{rec_last_id:04d}_{pay_party}.pdf", mime="application/pdf")
 
-                if pay_mob.strip():
-                    wa_pay_msg = (
-                        "💳 PAYMENT RECEIPT ACKNOWLEDGEMENT\n\n"
-                        f"Received From: {pay_party}\n"
-                        f"Receipt No: PAY-REC-{rec_last_id:04d}\n"
-                        f"Against Bill: {target_bill_no}\n"
-                        f"Amount Received: RS {pay_amount}/-\n"
-                        f"Payment Mode: {pay_mode}\n"
-                        f"Date: {pay_date}\n\n"
-                        "Thank you for payment! - Courier Solution"
-                    )
-                    wa_pay_url = create_whatsapp_link(pay_mob.strip(), wa_pay_msg)
-                    st.markdown(f'<a href="{wa_pay_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Step 2: Send Payment Receipt on WhatsApp</a>', unsafe_allow_html=True)
+                    if pay_mob.strip():
+                        wa_pay_msg = (
+                            "💳 PAYMENT RECEIPT ACKNOWLEDGEMENT\n\n"
+                            f"Received From: {pay_party}\n"
+                            f"Receipt No: PAY-REC-{rec_last_id:04d}\n"
+                            f"Against Bill: {target_bill_no}\n"
+                            f"Amount Received: RS {pay_amount}/-\n"
+                            f"Payment Mode: {pay_mode}\n"
+                            f"Date: {pay_date}\n\n"
+                            "Thank you for payment! - Courier Solution"
+                        )
+                        wa_pay_url = create_whatsapp_link(pay_mob.strip(), wa_pay_msg)
+                        st.markdown(f'<a href="{wa_pay_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Step 2: Send Payment Receipt on WhatsApp</a>', unsafe_allow_html=True)
 
     st.markdown("---")
     st.subheader("📜 Party Payment History & Delete")
     
-    conn = sqlite3.connect("courier_database.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, party_name, bill_no, date, amount, pay_mode, note FROM party_payments ORDER BY id DESC")
-    pay_rows = cursor.fetchall()
-    conn.close()
+    conn = get_db_connection()
+    pay_rows = []
+    if conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, party_name, bill_no, date, amount, pay_mode, note FROM party_payments ORDER BY id DESC")
+        pay_rows = cursor.fetchall()
+        conn.close()
 
     if pay_rows:
         pay_summary_pdf_bytes = generate_payments_summary_pdf(pay_rows, f"{start_str} to {end_str}")
@@ -1186,13 +1213,14 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                 st.download_button("🖨️ Receipt PDF", data=hist_pdf, file_name=f"Payment_Receipt_{r[0]}.pdf", mime="application/pdf", key=f"pdf_pay_{r[0]}")
             with col_py3:
                 if st.button("🗑️ Delete Pay", key=f"del_pay_{r[0]}"):
-                    conn = sqlite3.connect("courier_database.db")
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM party_payments WHERE id=?", (r[0],))
-                    conn.commit()
-                    conn.close()
-                    st.success("પેમેન્ટ એન્ટ્રી સફળતાપૂર્વક ડિલીટ થઈ ગઈ છે!")
-                    st.rerun()
+                    conn_del = get_db_connection()
+                    if conn_del:
+                        cursor_del = conn_del.cursor()
+                        cursor_del.execute("DELETE FROM party_payments WHERE id=%s", (r[0],))
+                        conn_del.commit()
+                        conn_del.close()
+                        st.success("પેમેન્ટ એન્ટ્રી સફળતાપૂર્વક ડિલીટ થઈ ગઈ છે!")
+                        st.rerun()
         st.metric("💰 Total Payment Received", f"RS {tot_received:,.2f}/-")
     else:
         st.info("કોઈ પેમેન્ટ રિસીવ રેકોર્ડ મળેલ નથી.")
