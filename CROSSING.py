@@ -637,7 +637,7 @@ menu = st.sidebar.radio("મેનુ પસંદ કરો (Menu)", [
     "➕ Add Account Party (પાર્ટી ઉમેરો)",
     "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)",
     "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)",
-    "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)",
+    "📊 Party Monthly Billing (ડિજિટલ પીડીએફ બિલ)",
     "💳 Party Payment Receive (પેમેન્ટ જમા & રસીદ)",
     "📊 Summary & Reports (કેશ & ક્રેડિટ સમરી)"
 ])
@@ -652,29 +652,68 @@ end_str = end_date.strftime("%d/%m/%Y")
 
 # ----------------- ૧. ADD PARTY MASTER -----------------
 if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
-    st.subheader("➕ Add Monthly Account Party Master")
-    with st.form("party_form", clear_on_submit=True):
-        p_name = st.text_input("Party Name (પાર્ટીનું નામ):")
-        p_addr = st.text_input("Address (સરનામું):")
-        p_city = st.text_input("City / Pin Code (શહેર / પીનકોડ):")
-        p_mob = st.text_input("WhatsApp Mobile No (મોબાઈલ નંબર):")
-        submit_p = st.form_submit_button("Save Party", type="primary")
+    st.subheader("➕ Add & Manage Monthly Account Parties")
+    
+    # Session state for editing party
+    if 'edit_party_id' not in st.session_state:
+        st.session_state['edit_party_id'] = None
+
+    conn = get_local_connection()
+    cursor = conn.cursor()
+    
+    # If editing, fetch party details
+    edit_data = None
+    if st.session_state['edit_party_id']:
+        cursor.execute("SELECT id, party_name, party_address, party_city, mobile FROM parties WHERE id=?", (st.session_state['edit_party_id'],))
+        edit_data = cursor.fetchone()
+
+    with st.form("party_form"):
+        st.write("### 📝 પાર્ટી ફોર્મ (નવી ઉમેરો અથવા એડિટ કરો)")
+        p_name_val = edit_data[1] if edit_data else ""
+        p_addr_val = edit_data[2] if edit_data else ""
+        p_city_val = edit_data[3] if edit_data else ""
+        p_mob_val = edit_data[4] if edit_data else ""
+
+        p_name = st.text_input("Party Name (પાર્ટીનું નામ):", value=p_name_val)
+        p_addr = st.text_input("Address (સરનામું):", value=p_addr_val)
+        p_city = st.text_input("City / Pin Code (શહેર / પીનકોડ):", value=p_city_val)
+        p_mob = st.text_input("WhatsApp Mobile No (મોબાઈલ નંબર):", value=p_mob_val)
+        
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            submit_p = st.form_submit_button("💾 Save Party", type="primary")
+        with col_f2:
+            cancel_edit = st.form_submit_button("❌ Cancel Edit")
+
+        if cancel_edit:
+            st.session_state['edit_party_id'] = None
+            st.rerun()
+
         if submit_p:
             if not p_name.strip():
                 st.error("મહેરબાની કરીને Party Name ભરો!")
             else:
-                conn = get_local_connection()
-                cursor = conn.cursor()
                 try:
-                    cursor.execute("INSERT INTO parties (party_name, party_address, party_city, mobile) VALUES (?, ?, ?, ?)", (p_name.strip(), p_addr.strip(), p_city.strip(), p_mob.strip()))
-                    conn.commit()
-                    st.success(f"પાર્ટી '{p_name}' સફળતાપૂર્વક ઉમેરાઈ ગઈ છે!")
+                    if st.session_state['edit_party_id']:
+                        cursor.execute("UPDATE parties SET party_name=?, party_address=?, party_city=?, mobile=? WHERE id=?", 
+                                      (p_name.strip(), p_addr.strip(), p_city.strip(), p_mob.strip(), st.session_state['edit_party_id']))
+                        conn.commit()
+                        st.success(f"પાર્ટી '{p_name}' સફળતાપૂર્વક અપડેટ થઈ ગઈ છે!")
+                        st.session_state['edit_party_id'] = None
+                    else:
+                        cursor.execute("INSERT INTO parties (party_name, party_address, party_city, mobile) VALUES (?, ?, ?, ?)", 
+                                      (p_name.strip(), p_addr.strip(), p_city.strip(), p_mob.strip()))
+                        conn.commit()
+                        st.success(f"પાર્ટી '{p_name}' સફળતાપૂર્વક ઉમેરાઈ ગઈ છે!")
                     sync_two_way()
+                    st.rerun()
                 except sqlite3.IntegrityError:
                     st.error("આ નામની પાર્ટી પહેલેથી જ અસ્તિત્વમાં છે!")
-                conn.close()
+    conn.close()
+
     st.markdown("---")
-    st.write("### 🏢 સેવ થયેલી પાર્ટીઓની યાદી & ડિલીટ:")
+    st.write("### 🏢 સેવ થયેલી પાર્ટીઓની યાદી (Table View):")
+    
     conn = get_local_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, party_name, party_address, party_city, mobile FROM parties ORDER BY party_name ASC")
@@ -682,15 +721,33 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
     conn.close()
     
     if p_rows:
-        for r in p_rows:
-            col_p1, col_p2 = st.columns([4, 1])
-            with col_p1:
-                st.write(f"🏢 **{r[1]}** | Mobile: {r[4]} | {r[2]} ({r[3]})")
-            with col_p2:
-                if st.button("🗑️ Delete", key=f"del_party_{r[0]}"):
+        # Table Header
+        header_cols = st.columns([0.5, 2.5, 2.5, 1.5, 1, 1])
+        header_cols[0].write("<b>ક્રમ</b>", unsafe_allow_html=True)
+        header_cols[1].write("<b>પાર્ટીનું નામ</b>", unsafe_allow_html=True)
+        header_cols[2].write("<b>સરનામું / શહેર</b>", unsafe_allow_html=True)
+        header_cols[3].write("<b>મોબાઈલ નંબર</b>", unsafe_allow_html=True)
+        header_cols[4].write("<b>એડિટ</b>", unsafe_allow_html=True)
+        header_cols[5].write("<b>ડિલીટ</b>", unsafe_allow_html=True)
+        st.markdown("---")
+
+        for idx, r in enumerate(p_rows, 1):
+            r_id, r_name, r_addr, r_city, r_mob = r
+            row_cols = st.columns([0.5, 2.5, 2.5, 1.5, 1, 1])
+            row_cols[0].write(str(idx))
+            row_cols[1].write(f"**{r_name}**")
+            row_cols[2].write(f"{r_addr}, {r_city}")
+            row_cols[3].write(r_mob if r_mob else "-")
+            
+            with row_cols[4]:
+                if st.button("✏️ Edit", key=f"edit_party_{r_id}"):
+                    st.session_state['edit_party_id'] = r_id
+                    st.rerun()
+            with row_cols[5]:
+                if st.button("🗑️ Delete", key=f"del_party_{r_id}"):
                     conn = get_local_connection()
                     cursor = conn.cursor()
-                    cursor.execute("DELETE FROM parties WHERE id=?", (r[0],))
+                    cursor.execute("DELETE FROM parties WHERE id=?", (r_id,))
                     conn.commit()
                     conn.close()
 
@@ -698,14 +755,16 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
                     if sconn:
                         try:
                             scur = sconn.cursor()
-                            scur.execute("DELETE FROM parties WHERE party_name=%s", (r[1],))
+                            scur.execute("DELETE FROM parties WHERE party_name=%s", (r_name,))
                             sconn.commit()
                             scur.close()
                             sconn.close()
                         except Exception: pass
 
-                    st.success(f"પાર્ટી '{r[1]}' ડિલીટ થઈ ગઈ છે!")
+                    st.success(f"પાર્ટી '{r_name}' ડિલીટ થઈ ગઈ છે!")
                     st.rerun()
+    else:
+        st.info("હજુ સુધી કોઈ પાર્ટી ઉમેરેલી નથી.")
 
 # ----------------- ૨. CASH BOOKING -----------------
 elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)":
@@ -810,7 +869,6 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
             except Exception:
                 pass
                 
-        # Grand Total Metrics at Top & Bottom of History
         st.markdown("---")
         mc1, mc2, mc3 = st.columns(3)
         mc1.metric("📦 કુલ કેશ બુકિંગ રકમ", f"RS {tot_c_amt:,.2f}/-")
@@ -819,11 +877,11 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
         st.markdown("---")
         
         if filtered_cash_history:
-            for r in filtered_cash_history:
+            for idx, r in enumerate(filtered_cash_history, 1):
                 r_id, cons, r_date, s_name, r_name, amt, p_status = r
                 cur_status_str = f"🟢 PAID" if p_status == "Paid" else f"🔴 UNPAID"
                 
-                with st.expander(f"🧾 Cons: {cons} | Date: {r_date} | From: {s_name} ➔ To: {r_name} | RS {amt}/- | Status: {cur_status_str}"):
+                with st.expander(f"[{idx}] Cons: {cons} | Date: {r_date} | From: {s_name} ➔ To: {r_name} | RS {amt}/- | Status: {cur_status_str}"):
                     col_h1, col_h2, col_h3, col_h4 = st.columns([2, 1.2, 1.2, 1])
                     with col_h1:
                         st.write(f"**Date:** {r_date} | **Amount:** RS {amt}/-")
@@ -907,6 +965,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
         else:
             selected_party = st.selectbox("Select Party Name (પાર્ટી સિલેક્ટ કરો):", party_names)
             
+            # પરફેક્ટ ઓટો-ફિલ લોજિક (પાર્ટી બદલાતા જ સરનામું બદલાઈ જશે)
             default_s_addr = party_dict[selected_party]["address"] if selected_party in party_dict else ""
             default_s_city = party_dict[selected_party]["city"] if selected_party in party_dict else ""
 
@@ -925,8 +984,9 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 origin = st.text_input("Origin:", "BHAVNAGAR", key="cr_orig")
                 dest = st.text_input("Destination:", key="cr_dest")
             with col2:
-                sender_address = st.text_input("Sender Address (મોકલનારનું સરનામું):", value=default_s_addr, key="cr_s_addr")
-                sender_city = st.text_input("Sender City/Pin (શહેર/પીન):", value=default_s_city, key="cr_s_city")
+                # Dynamic Auto-filled Sender Address & City based on selected party
+                sender_address = st.text_input("Sender Address (મોકલનારનું સરનામું):", value=default_s_addr, key=f"cr_s_addr_{selected_party}")
+                sender_city = st.text_input("Sender City/Pin (શહેર/પીન):", value=default_s_city, key=f"cr_s_city_{selected_party}")
                 rec_name = st.text_input("Recipient Name:", key="cr_r_name")
                 rec_address = st.text_input("Recipient Address:", key="cr_r_addr")
                 rec_city = st.text_input("Recipient City/Pin:", value=cr_auto_pin, key="cr_r_city")
@@ -981,10 +1041,10 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
         cr_all_rows = cursor.fetchall()
         conn.close()
         if cr_all_rows:
-            for r in cr_all_rows:
+            for idx, r in enumerate(cr_all_rows, 1):
                 rec_id, cons, r_date, party, recip, destination, wt, amt, b_no, c_co, c_mode, orig, s_addr, s_city, r_addr, r_city, pcs, p_img = r
                 b_status = f" (Bill: {b_no})" if b_no else " (Unbilled)"
-                with st.expander(f"🧾 Cons: {cons} | Party: {party} | Date: {r_date} | RS {amt}/-{b_status}"):
+                with st.expander(f"[{idx}] Cons: {cons} | Party: {party} | Date: {r_date} | RS {amt}/-{b_status}"):
                     col_e1, col_e2 = st.columns(2)
                     with col_e1:
                         st.write(f"**Recipient:** {recip} ({destination})")
@@ -1154,9 +1214,9 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ પીડીએફ 
             type="primary"
         )
         st.write("")
-        for b in all_bills:
+        for idx, b in enumerate(all_bills, 1):
             bill_id, b_no, b_party, b_date, b_period, b_amt = b
-            with st.expander(f"📄 Bill No: {b_no} | Party: {b_party} | Amount: RS {b_amt}/- ({b_date})"):
+            with st.expander(f"[{idx}] Bill No: {b_no} | Party: {b_party} | Amount: RS {b_amt}/- ({b_date})"):
                 col_b1, col_b2, col_b3 = st.columns([2, 2, 1])
                 
                 conn_b = get_local_connection()
@@ -1288,10 +1348,10 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
         )
         st.write("")
         tot_received = 0
-        for r in pay_rows:
+        for idx, r in enumerate(pay_rows, 1):
             col_py1, col_py2, col_py3 = st.columns([3, 1.2, 1])
             with col_py1:
-                st.write(f"🏢 **{r[1]}** | Bill: **{r[2]}** | Date: {r[3]} | **RS {r[4]}** ({r[5]})")
+                st.write(f"[{idx}] 🏢 **{r[1]}** | Bill: **{r[2]}** | Date: {r[3]} | **RS {r[4]}** ({r[5]})")
                 try: tot_received += float(r[4])
                 except Exception: pass
             with col_py2:
@@ -1312,7 +1372,7 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                             scur.execute("DELETE FROM party_payments WHERE party_name=%s AND amount=%s AND date=%s", (r[1], r[4], r[3]))
                             sconn.commit()
                             scur.close()
-                            sconn.close()
+                            scur.close()
                         except Exception: pass
 
                     st.success("પેમેન્ટ એન્ટ્રી સફળતાપૂર્વક ડિલીટ થઈ ગઈ છે!")
