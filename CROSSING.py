@@ -71,7 +71,6 @@ def init_db():
         )
     """)
     
-    # Safe migration for existing database to add payment_status column if not exists
     try:
         cursor.execute("ALTER TABLE receipts ADD COLUMN payment_status TEXT DEFAULT 'Unpaid'")
         conn.commit()
@@ -111,7 +110,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-    # Cloud Supabase Setup
     sconn = get_supabase_connection()
     if sconn:
         try:
@@ -177,7 +175,6 @@ def init_db():
 
 @st.cache_data(ttl=60)
 def sync_two_way():
-    """લોકલ અને ક્લાઉડ વચ્ચે ઓપ્ટિમાઇઝ્ડ સિંક્રોનાઇઝેશન (સ્પીડ માટે ફાસ્ટ મોડ)"""
     sconn = get_supabase_connection()
     if not sconn:
         return
@@ -235,14 +232,7 @@ def create_whatsapp_link(phone_num, msg_text):
 # ----------------- PDF RECEIPT GENERATOR WITH LARGE PARCEL PHOTO -----------------
 def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, img_bytes=None):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer, 
-        pagesize=letter, 
-        rightMargin=25, 
-        leftMargin=25, 
-        topMargin=20, 
-        bottomMargin=20
-    )
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=25, leftMargin=25, topMargin=20, bottomMargin=20)
     story = []
     styles = getSampleStyleSheet()
     f_header_title = ParagraphStyle('HTitle', fontName='Helvetica-Bold', fontSize=26, leading=30, textColor=colors.HexColor('#002147'))
@@ -256,18 +246,9 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     barcode_obj = code128.Code128(cons_no, barHeight=35, barWidth=1.5)
     
     header_data = [
-        [
-            Paragraph("📦 <b>COURIER SOLUTION</b>", f_header_title),
-            Paragraph("Consignment Number", f_label_sm)
-        ],
-        [
-            Paragraph("<b>EXPRESS CARGO & LOGISTICS SERVICES</b>", f_header_sub),
-            barcode_obj
-        ],
-        [
-            "",
-            Paragraph(f"<b>{cons_no}</b>", f_val_lg)
-        ]
+        [Paragraph("📦 <b>COURIER SOLUTION</b>", f_header_title), Paragraph("Consignment Number", f_label_sm)],
+        [Paragraph("<b>EXPRESS CARGO & LOGISTICS SERVICES</b>", f_header_sub), barcode_obj],
+        ["", Paragraph(f"<b>{cons_no}</b>", f_val_lg)]
     ]
     t_header = Table(header_data, colWidths=[335, 210])
     t_header.setStyle(TableStyle([
@@ -276,13 +257,11 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('PADDING', (0,0), (-1,-1), 6),
     ]))
-    row2_data = [
-        [
-            Paragraph(f"<b>Origin:</b> <font size=13 color='#002147'>{origin.upper()}</font><br/><b>Courier:</b> <font color='blue'>{courier_co.upper()}</font>", f_val_lg),
-            Paragraph(f"<b>Destination:</b><br/><font size=16>{dest.upper()}</font>", f_val_huge),
-            Paragraph(f"<b>Date:</b> {date}<br/><b>Booking:</b> {booking_type}", f_val_lg)
-        ]
-    ]
+    row2_data = [[
+        Paragraph(f"<b>Origin:</b> <font size=13 color='#002147'>{origin.upper()}</font><br/><b>Courier:</b> <font color='blue'>{courier_co.upper()}</font>", f_val_lg),
+        Paragraph(f"<b>Destination:</b><br/><font size=16>{dest.upper()}</font>", f_val_huge),
+        Paragraph(f"<b>Date:</b> {date}<br/><b>Booking:</b> {booking_type}", f_val_lg)
+    ]]
     t_row2 = Table(row2_data, colWidths=[175, 200, 170])
     t_row2.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 1.5, colors.black),
@@ -291,10 +270,7 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
         ('PADDING', (0,0), (-1,-1), 8),
     ]))
     row3_data = [
-        [
-            Paragraph("CONSIGNOR (FROM)", f_val_lg),
-            Paragraph("CONSIGNEE (TO)", f_val_lg)
-        ],
+        [Paragraph("CONSIGNOR (FROM)", f_val_lg), Paragraph("CONSIGNEE (TO)", f_val_lg)],
         [
             Paragraph(f"<font size=14 color='#002147'><b>{sender_name.upper()}</b></font><br/><br/><b>Address:</b> {sender_address}<br/><br/><b>City/Pin:</b> {sender_city}", f_val_lg),
             Paragraph(f"<font size=14 color='#002147'><b>{rec_name.upper()}</b></font><br/><br/><b>Address:</b> {rec_address}<br/><br/><b>City/Pin:</b> {rec_city}", f_val_lg)
@@ -310,12 +286,7 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
         ('PADDING', (0,0), (-1,-1), 8),
     ]))
     row4_data = [
-        [
-            Paragraph("Pieces (Pcs)", f_label_sm),
-            Paragraph("Weight (Kg)", f_label_sm),
-            Paragraph("Total Amount (RS)", f_label_sm),
-            Paragraph("Payment Status", f_label_sm)
-        ],
+        [Paragraph("Pieces (Pcs)", f_label_sm), Paragraph("Weight (Kg)", f_label_sm), Paragraph("Total Amount (RS)", f_label_sm), Paragraph("Payment Status", f_label_sm)],
         [
             Paragraph(f"<b>{pcs} Pcs</b>", f_val_huge),
             Paragraph(f"<b>{weight} Kg</b>", f_val_huge),
@@ -355,18 +326,55 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
             story.append(Spacer(1, 10))
         except Exception:
             pass
-    foot_data = [
-        [
-            Paragraph("<b>Shipment Remarks:</b> Booking Generated via Courier Solution.<br/><i>* Parcel Proof Photo attached above. Subject to terms.</i>", f_footer),
-            Paragraph("________________________<br/><b>Authorized Signatory</b><br/>(Courier Solution)", f_val_lg)
-        ]
-    ]
+    foot_data = [[
+        Paragraph("<b>Shipment Remarks:</b> Booking Generated via Courier Solution.<br/><i>* Parcel Proof Photo attached above. Subject to terms.</i>", f_footer),
+        Paragraph("________________________<br/><b>Authorized Signatory</b><br/>(Courier Solution)", f_val_lg)
+    ]]
     t_foot = Table(foot_data, colWidths=[335, 210])
     t_foot.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
         ('PADDING', (0,0), (-1,-1), 4),
     ]))
     story.append(t_foot)
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+# ----------------- SUMMARY PDF REPORT GENERATOR -----------------
+def generate_summary_pdf_report(title_text, period_str, headers, rows, total_amt_str):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    story = []
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#002147'), alignment=1, spaceAfter=2)
+    sub_style = ParagraphStyle('SubStyle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#555555'), alignment=1, spaceAfter=15)
+    bold_style = ParagraphStyle('BoldStyle', parent=styles['Normal'], fontSize=9, textColor=colors.black, fontName='Helvetica-Bold')
+    normal_style = ParagraphStyle('NormalStyle', parent=styles['Normal'], fontSize=9, textColor=colors.black)
+    
+    story.append(Paragraph("📦 COURIER SOLUTION", title_style))
+    story.append(Paragraph(f"<b>{title_text}</b><br/>Period: {period_str}", sub_style))
+    
+    table_headers = [Paragraph(f'<b>{h}</b>', bold_style) for h in headers]
+    data = [table_headers]
+    for r in rows:
+        data.append([Paragraph(str(cell), normal_style) for cell in r])
+        
+    data.append([
+        Paragraph("<b>TOTAL</b>", bold_style),
+        "", "", "", "", "",
+        Paragraph(f"<b>{total_amt_str}</b>", ParagraphStyle('GTotal', parent=bold_style, textColor=colors.HexColor('#008000')))
+    ])
+    
+    t = Table(data, colWidths=[30, 80, 75, 85, 95, 115, 65])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#002147')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
+        ('SPAN', (0, -1), (5, -1)),
+        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#e8f5e9')),
+        ('PADDING', (0,0), (-1,-1), 5),
+    ]))
+    story.append(t)
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
@@ -630,7 +638,8 @@ menu = st.sidebar.radio("મેનુ પસંદ કરો (Menu)", [
     "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)",
     "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)",
     "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)",
-    "💳 Party Payment Receive (પેમેન્ટ જમા & રસીદ)"
+    "💳 Party Payment Receive (પેમેન્ટ જમા & રસીદ)",
+    "📊 Summary & Reports (કેશ & ક્રેડિટ સમરી)"
 ])
 st.sidebar.markdown("---")
 st.sidebar.subheader("📅 તારીખ ફિલ્ટર (Date Filter)")
@@ -700,7 +709,7 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
 
 # ----------------- ૨. CASH BOOKING -----------------
 elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)":
-    tab1, tab2, tab3 = st.tabs(["💵 Cash Booking (નવી એન્ટ્રી)", "📜 Cash History & Delete (હિસ્ટ્રી & Paid/Unpaid)", "🖨️ Re-Print Receipt (ફરીવાર પ્રિન્ટ)"])
+    tab1, tab2, tab3 = st.tabs(["💵 Cash Booking (નવી એન્ટ્રી)", "📜 Cash History & Date Filter (હિસ્ટ્રી & ટોટલ)", "🖨️ Re-Print Receipt (ફરીવાર પ્રિન્ટ)"])
     with tab1:
         st.subheader("Cash Courier Booking")
         st.markdown("### 📷 Auto-Scan Label (સ્માર્ટ ફોટો સ્કેનર - બારકોડ & પિનકોડ ઓટો-ફિલ)")
@@ -732,8 +741,6 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
         with col4: pcs = st.text_input("Pieces (Pcs):", "1", key="c_pcs")
         with col5: amount = st.text_input("Total Amount (RS):", key="c_amt")
         c_whatsapp_num = st.text_input("Customer WhatsApp Mobile No (મોબાઈલ નંબર):", key="c_wa_num")
-        
-        # Initial status for cash booking payment
         c_initial_pay_status = st.selectbox("Payment Status (પેમેન્ટ સ્ટેટસ):", ["Paid (ચૂકવાઈ ગયું)", "Unpaid (બાકી)"], key="c_init_status")
 
         if st.button("💾 Save & Generate Cash Receipt", type="primary"):
@@ -775,19 +782,48 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                     st.error("આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે!")
                 conn.close()
     with tab2:
-        st.subheader("📜 Cash Booking Records & Paid/Unpaid Status Management")
+        st.subheader("📜 Cash Booking Records & Date-Wise Total Summary")
+        st.info(f"📅 કેશ હિસ્ટ્રી ડેટ ફિલ્ટર: **{start_str}** થી **{end_str}**")
+        
         conn = get_local_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT id, cons_no, date, sender_name, rec_name, amount, payment_status FROM receipts WHERE booking_type='Cash' ORDER BY id DESC")
         cash_rows = cursor.fetchall()
         conn.close()
         
-        if cash_rows:
-            for r in cash_rows:
+        filtered_cash_history = []
+        tot_c_amt = 0.0
+        tot_c_paid = 0.0
+        tot_c_unpaid = 0.0
+        
+        for r in cash_rows:
+            try:
+                r_dt = datetime.datetime.strptime(r[2], "%d/%m/%Y").date()
+                if start_date <= r_dt <= end_date:
+                    filtered_cash_history.append(r)
+                    amt_v = float(r[5]) if r[5] else 0.0
+                    tot_c_amt += amt_v
+                    if r[6] == "Paid":
+                        tot_c_paid += amt_v
+                    else:
+                        tot_c_unpaid += amt_v
+            except Exception:
+                pass
+                
+        # Grand Total Metrics at Top & Bottom of History
+        st.markdown("---")
+        mc1, mc2, mc3 = st.columns(3)
+        mc1.metric("📦 કુલ કેશ બુકિંગ રકમ", f"RS {tot_c_amt:,.2f}/-")
+        mc2.metric("🟢 કુલ Paid (ચૂકવાઈ ગયેલ)", f"RS {tot_c_paid:,.2f}/-")
+        mc3.metric("🔴 કુલ Unpaid (બાકી)", f"RS {tot_c_unpaid:,.2f}/-")
+        st.markdown("---")
+        
+        if filtered_cash_history:
+            for r in filtered_cash_history:
                 r_id, cons, r_date, s_name, r_name, amt, p_status = r
                 cur_status_str = f"🟢 PAID" if p_status == "Paid" else f"🔴 UNPAID"
                 
-                with st.expander(f"🧾 Cons: {cons} | From: {s_name} ➔ To: {r_name} | RS {amt}/- | Status: {cur_status_str}"):
+                with st.expander(f"🧾 Cons: {cons} | Date: {r_date} | From: {s_name} ➔ To: {r_name} | RS {amt}/- | Status: {cur_status_str}"):
                     col_h1, col_h2, col_h3, col_h4 = st.columns([2, 1.2, 1.2, 1])
                     with col_h1:
                         st.write(f"**Date:** {r_date} | **Amount:** RS {amt}/-")
@@ -833,7 +869,7 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                             st.success(f"Consignment {cons} ડિલીટ થઈ ગયું છે!")
                             st.rerun()
         else:
-            st.info("કોઈ કેશ બુકિંગ એન્ટ્રી ઉપલબ્ધ નથી.")
+            st.warning("આ તારીખની મર્યાદામાં કોઈ કેશ બુકિંગ એન્ટ્રી મળી નથી.")
             
     with tab3:
         st.subheader("🖨️ Re-Print / View Receipt by Consignment No")
@@ -871,7 +907,6 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
         else:
             selected_party = st.selectbox("Select Party Name (પાર્ટી સિલેક્ટ કરો):", party_names)
             
-            # Auto-fetch address and city from selected party dictionary
             default_s_addr = party_dict[selected_party]["address"] if selected_party in party_dict else ""
             default_s_city = party_dict[selected_party]["city"] if selected_party in party_dict else ""
 
@@ -890,7 +925,6 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 origin = st.text_input("Origin:", "BHAVNAGAR", key="cr_orig")
                 dest = st.text_input("Destination:", key="cr_dest")
             with col2:
-                # Sender address and city automatically populated from party master
                 sender_address = st.text_input("Sender Address (મોકલનારનું સરનામું):", value=default_s_addr, key="cr_s_addr")
                 sender_city = st.text_input("Sender City/Pin (શહેર/પીન):", value=default_s_city, key="cr_s_city")
                 rec_name = st.text_input("Recipient Name:", key="cr_r_name")
@@ -1186,12 +1220,12 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
     cursor = conn.cursor()
     cursor.execute("SELECT party_name, mobile FROM parties ORDER BY party_name ASC")
     p_data = cursor.fetchall()
-    p_list = [r[0] for r in p_data]
     
     cursor.execute("SELECT bill_no, party_name, total_amount FROM bills ORDER BY id DESC")
     b_list = cursor.fetchall()
     conn.close()
     bill_options = ["-- Select Bill No (બિલ નં પસંદ કરો) --"] + [f"{b[0]} | {b[1]} | RS {b[2]}/-" for b in b_list]
+    p_list = [r[0] for r in p_data]
     if not p_list:
         st.warning("⚠️ પહેલા મેનુમાંથી 'Add Account Party' પસંદ કરીને પાર્ટી ઉમેરો!")
     else:
@@ -1286,4 +1320,109 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
         st.metric("💰 Total Payment Received", f"RS {tot_received:,.2f}/-")
     else:
         st.info("કોઈ પેમેન્ટ રિસીવ રેકોર્ડ મળેલ નથી.")
+
+# ----------------- ૬. SUMMARY & REPORTS -----------------
+elif menu == "📊 Summary & Reports (કેશ & ક્રેડિટ સમરી)":
+    st.subheader("📊 Comprehensive Summary & Reports (કેશ અને ક્રેડિટ સમરી)")
+    st.info(f"📅 ફિલ્ટર સમયગાળો (Date Range): **{start_str}** થી **{end_str}**")
+    
+    sum_tab1, sum_tab2 = st.tabs(["💵 Cash Booking Summary (કેશ સમરી)", "📋 Credit Account Summary (ક્રેડિટ સમરી)"])
+    
+    with sum_tab1:
+        st.write("### 💵 Cash Courier Bookings Date-Wise Summary")
+        conn = get_local_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, cons_no, date, courier_co, sender_name, rec_name, amount, payment_status FROM receipts WHERE booking_type='Cash' ORDER BY id DESC")
+        all_cash = cursor.fetchall()
+        conn.close()
+        
+        filtered_cash = []
+        tot_cash_amt = 0.0
+        tot_paid_amt = 0.0
+        tot_unpaid_amt = 0.0
+        
+        for r in all_cash:
+            try:
+                r_date_obj = datetime.datetime.strptime(r[2], "%d/%m/%Y").date()
+                if start_date <= r_date_obj <= end_date:
+                    filtered_cash.append(r)
+                    amt = float(r[6]) if r[6] else 0.0
+                    tot_cash_amt += amt
+                    if r[7] == "Paid":
+                        tot_paid_amt += amt
+                    else:
+                        tot_unpaid_amt += amt
+            except Exception:
+                pass
+                
+        col_s1, col_s2, col_s3 = st.columns(3)
+        col_s1.metric("📦 Total Cash Booking", f"RS {tot_cash_amt:,.2f}/-")
+        col_s2.metric("🟢 Total Paid (જમા)", f"RS {tot_paid_amt:,.2f}/-")
+        col_s3.metric("🔴 Total Unpaid (બાકી)", f"RS {tot_unpaid_amt:,.2f}/-")
+        
+        st.markdown("---")
+        if filtered_cash:
+            pdf_rows = []
+            for idx, r in enumerate(filtered_cash, 1):
+                st.write(f"**{idx}. Cons:** {r[1]} | **Date:** {r[2]} | **Courier:** {r[3]} | **From:** {r[4]} ➔ **To:** {r[5]} | **RS {r[6]}** [{r[7]}]")
+                pdf_rows.append([str(idx), str(r[1]), str(r[2]), str(r[3]), str(r[4]), str(r[5]), f"RS {float(r[6]):,.2f} ({r[7]})"])
+                
+            cash_sum_pdf = generate_summary_pdf_report("CASH BOOKING SUMMARY REPORT", f"{start_str} to {end_str}", ["Sr", "Cons No", "Date", "Courier", "Sender", "Recipient", "Amount / Status"], pdf_rows, f"RS {tot_cash_amt:,.2f}/- (Paid: {tot_paid_amt:,.2f} | Unpaid: {tot_unpaid_amt:,.2f})")
+            st.download_button(
+                label="🖨️ Download Cash Summary Report (PDF)",
+                data=cash_sum_pdf,
+                file_name=f"Cash_Summary_{start_str}_to_{end_str}.pdf",
+                mime="application/pdf",
+                type="primary"
+            )
+        else:
+            st.warning("આ તારીખની મર્યાદામાં કોઈ કેશ બુકિંગ એન્ટ્રી મળી નથી.")
+            
+    with sum_tab2:
+        st.write("### 📋 Credit Account Bookings Party-Wise Summary")
+        conn = get_local_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT party_name FROM parties ORDER BY party_name ASC")
+        party_rows = cursor.fetchall()
+        
+        cursor.execute("SELECT id, cons_no, date, sender_name, rec_name, dest, amount, bill_no FROM receipts WHERE booking_type='Credit Account' ORDER BY id DESC")
+        all_credit = cursor.fetchall()
+        conn.close()
+        
+        party_names_opt = ["🌐 All Parties (બધી પાર્ટીઓ)"] + [p[0] for p in party_rows]
+        sel_sum_party = st.selectbox("Select Party Filter for Summary:", party_names_opt, key="sum_party_sel")
+        
+        filtered_credit = []
+        tot_credit_amt = 0.0
+        
+        for r in all_credit:
+            try:
+                r_date_obj = datetime.datetime.strptime(r[2], "%d/%m/%Y").date()
+                if start_date <= r_date_obj <= end_date:
+                    if sel_sum_party == "🌐 All Parties (બધી પાર્ટીઓ)" or r[3] == sel_sum_party:
+                        filtered_credit.append(r)
+                        tot_credit_amt += float(r[6]) if r[6] else 0.0
+            except Exception:
+                pass
+                
+        st.metric("📊 Total Credit Booking Amount", f"RS {tot_credit_amt:,.2f}/-")
+        st.markdown("---")
+        
+        if filtered_credit:
+            cred_pdf_rows = []
+            for idx, r in enumerate(filtered_credit, 1):
+                b_text = f"Bill: {r[7]}" if r[7] else "Unbilled"
+                st.write(f"**{idx}. Cons:** {r[1]} | **Party:** {r[3]} | **Date:** {r[2]} | **To:** {r[4]} ({r[5]}) | **RS {r[6]}** [{b_text}]")
+                cred_pdf_rows.append([str(idx), str(r[1]), str(r[2]), str(r[3]), str(r[4]), str(r[5]), f"RS {float(r[6]):,.2f}"])
+                
+            cred_sum_pdf = generate_summary_pdf_report(f"CREDIT ACCOUNT SUMMARY ({sel_sum_party})", f"{start_str} to {end_str}", ["Sr", "Cons No", "Date", "Party Name", "Recipient", "Destination", "Amount"], cred_pdf_rows, f"RS {tot_credit_amt:,.2f}/-")
+            st.download_button(
+                label="🖨️ Download Credit Summary Report (PDF)",
+                data=cred_sum_pdf,
+                file_name=f"Credit_Summary_{sel_sum_party}_{start_str}_to_{end_str}.pdf",
+                mime="application/pdf",
+                type="primary"
+            )
+        else:
+            st.warning("આ ફિલ્ટર મુજબ કોઈ ક્રેડિટ બુકિંગ એન્ટ્રી મળી નથી.")
 
