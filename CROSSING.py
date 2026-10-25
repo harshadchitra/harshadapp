@@ -654,14 +654,12 @@ end_str = end_date.strftime("%d/%m/%Y")
 if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
     st.subheader("➕ Add & Manage Monthly Account Parties")
     
-    # Session state for editing party
     if 'edit_party_id' not in st.session_state:
         st.session_state['edit_party_id'] = None
 
     conn = get_local_connection()
     cursor = conn.cursor()
     
-    # If editing, fetch party details
     edit_data = None
     if st.session_state['edit_party_id']:
         cursor.execute("SELECT id, party_name, party_address, party_city, mobile FROM parties WHERE id=?", (st.session_state['edit_party_id'],))
@@ -721,7 +719,6 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
     conn.close()
     
     if p_rows:
-        # Table Header
         header_cols = st.columns([0.5, 2.5, 2.5, 1.5, 1, 1])
         header_cols[0].write("<b>ક્રમ</b>", unsafe_allow_html=True)
         header_cols[1].write("<b>પાર્ટીનું નામ</b>", unsafe_allow_html=True)
@@ -965,7 +962,6 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
         else:
             selected_party = st.selectbox("Select Party Name (પાર્ટી સિલેક્ટ કરો):", party_names)
             
-            # પરફેક્ટ ઓટો-ફિલ લોજિક (પાર્ટી બદલાતા જ સરનામું બદલાઈ જશે)
             default_s_addr = party_dict[selected_party]["address"] if selected_party in party_dict else ""
             default_s_city = party_dict[selected_party]["city"] if selected_party in party_dict else ""
 
@@ -984,7 +980,6 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 origin = st.text_input("Origin:", "BHAVNAGAR", key="cr_orig")
                 dest = st.text_input("Destination:", key="cr_dest")
             with col2:
-                # Dynamic Auto-filled Sender Address & City based on selected party
                 sender_address = st.text_input("Sender Address (મોકલનારનું સરનામું):", value=default_s_addr, key=f"cr_s_addr_{selected_party}")
                 sender_city = st.text_input("Sender City/Pin (શહેર/પીન):", value=default_s_city, key=f"cr_s_city_{selected_party}")
                 rec_name = st.text_input("Recipient Name:", key="cr_r_name")
@@ -1372,7 +1367,7 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                             scur.execute("DELETE FROM party_payments WHERE party_name=%s AND amount=%s AND date=%s", (r[1], r[4], r[3]))
                             sconn.commit()
                             scur.close()
-                            scur.close()
+                            sconn.close()
                         except Exception: pass
 
                     st.success("પેમેન્ટ એન્ટ્રી સફળતાપૂર્વક ડિલીટ થઈ ગઈ છે!")
