@@ -66,9 +66,18 @@ def init_db():
             amount TEXT,
             booking_type TEXT,
             bill_no TEXT,
-            parcel_img BLOB
+            parcel_img BLOB,
+            payment_status TEXT DEFAULT 'Unpaid'
         )
     """)
+    
+    # Safe migration for existing database to add payment_status column if not exists
+    try:
+        cursor.execute("ALTER TABLE receipts ADD COLUMN payment_status TEXT DEFAULT 'Unpaid'")
+        conn.commit()
+    except Exception:
+        pass
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS parties (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -126,7 +135,8 @@ def init_db():
                     pcs TEXT,
                     amount TEXT,
                     booking_type TEXT,
-                    bill_no TEXT
+                    bill_no TEXT,
+                    payment_status TEXT DEFAULT 'Unpaid'
                 )
             """)
             scur.execute("""
@@ -176,7 +186,6 @@ def sync_two_way():
         lcur = lconn.cursor()
         scur = sconn.cursor()
 
-        # PARTIES SYNC
         scur.execute("SELECT party_name, party_address, party_city, mobile FROM parties")
         for row in scur.fetchall():
             lcur.execute("INSERT OR IGNORE INTO parties (party_name, party_address, party_city, mobile) VALUES (?, ?, ?, ?)", row)
@@ -188,7 +197,6 @@ def sync_two_way():
     except Exception:
         pass
 
-# Initialize DB (Run sync only once in session or lightly)
 init_db()
 if 'synced' not in st.session_state:
     sync_two_way()
@@ -677,7 +685,6 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
                     conn.commit()
                     conn.close()
 
-                    # Cloud Delete
                     sconn = get_supabase_connection()
                     if sconn:
                         try:
@@ -693,7 +700,7 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
 
 # ----------------- ૨. CASH BOOKING -----------------
 elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)":
-    tab1, tab2, tab3 = st.tabs(["💵 Cash Booking (નવી એન્ટ્રી)", "📜 Cash History & Delete (હિસ્ટ્રી)", "🖨️ Re-Print Receipt (ફરીવાર પ્રિન્ટ)"])
+    tab1, tab2, tab3 = st.tabs(["💵 Cash Booking (નવી એન્ટ્રી)", "📜 Cash History & Delete (હિસ્ટ્રી & Paid/Unpaid)", "🖨️ Re-Print Receipt (ફરીવાર પ્રિન્ટ)"])
     with tab1:
         st.subheader("Cash Courier Booking")
         st.markdown("### 📷 Auto-Scan Label (સ્માર્ટ ફોટો સ્કેનર - બારકોડ & પિનકોડ ઓટો-ફિલ)")
@@ -725,20 +732,25 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
         with col4: pcs = st.text_input("Pieces (Pcs):", "1", key="c_pcs")
         with col5: amount = st.text_input("Total Amount (RS):", key="c_amt")
         c_whatsapp_num = st.text_input("Customer WhatsApp Mobile No (મોબાઈલ નંબર):", key="c_wa_num")
+        
+        # Initial status for cash booking payment
+        c_initial_pay_status = st.selectbox("Payment Status (પેમેન્ટ સ્ટેટસ):", ["Paid (ચૂકવાઈ ગયું)", "Unpaid (બાકી)"], key="c_init_status")
+
         if st.button("💾 Save & Generate Cash Receipt", type="primary"):
             if not cons_no or not sender_name or not rec_name or not amount:
                 st.error("મહેરબાની કરીને Consignment No, Sender Name, Recipient Name અને Amount ભરો!")
             else:
                 img_bytes = uploaded_photo.getvalue() if uploaded_photo else None
+                status_val = "Paid" if "Paid" in c_initial_pay_status else "Unpaid"
                 conn = get_local_connection()
                 cursor = conn.cursor()
                 try:
                     cursor.execute("""
-                        INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, parcel_img)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), sender_name.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Cash', img_bytes))
+                        INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, parcel_img, payment_status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), sender_name.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Cash', img_bytes, status_val))
                     conn.commit()
-                    st.success(f"Cash Entry Saved Successfully for Consignment: {cons_no}")
+                    st.success(f"Cash Entry Saved Successfully for Consignment: {cons_no} [{status_val}]")
                     sync_two_way()
                     
                     pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Cash', img_bytes)
@@ -754,7 +766,7 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                             f"Courier: {courier_co}\n"
                             f"To: {rec_name} ({dest})\n"
                             f"Weight: {weight} Kg ({pcs} Pcs)\n"
-                            f"Amount Paid: RS {amount}/-\n\n"
+                            f"Amount: RS {amount}/- [{status_val}]\n\n"
                             "Thank you for choosing Courier Solution!"
                         )
                         wa_url = create_whatsapp_link(c_whatsapp_num.strip(), wa_msg)
@@ -763,36 +775,66 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                     st.error("આ Consignment Number પહેલેથી જ અસ્તિત્વમાં છે!")
                 conn.close()
     with tab2:
-        st.subheader("📜 Cash Booking Records & Collection History")
+        st.subheader("📜 Cash Booking Records & Paid/Unpaid Status Management")
         conn = get_local_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, cons_no, date, sender_name, rec_name, amount FROM receipts WHERE booking_type='Cash' ORDER BY id DESC")
+        cursor.execute("SELECT id, cons_no, date, sender_name, rec_name, amount, payment_status FROM receipts WHERE booking_type='Cash' ORDER BY id DESC")
         cash_rows = cursor.fetchall()
         conn.close()
-        for r in cash_rows:
-            col_c1, col_c2 = st.columns([4, 1])
-            with col_c1:
-                st.write(f"🧾 **Cons: {r[1]}** | Date: {r[2]} | From: {r[3]} ➔ To: {r[4]} | **Amount: RS {r[5]}/-**")
-            with col_c2:
-                if st.button("🗑️ Delete", key=f"del_cash_{r[0]}"):
-                    conn = get_local_connection()
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM receipts WHERE id=?", (r[0],))
-                    conn.commit()
-                    conn.close()
+        
+        if cash_rows:
+            for r in cash_rows:
+                r_id, cons, r_date, s_name, r_name, amt, p_status = r
+                cur_status_str = f"🟢 PAID" if p_status == "Paid" else f"🔴 UNPAID"
+                
+                with st.expander(f"🧾 Cons: {cons} | From: {s_name} ➔ To: {r_name} | RS {amt}/- | Status: {cur_status_str}"):
+                    col_h1, col_h2, col_h3, col_h4 = st.columns([2, 1.2, 1.2, 1])
+                    with col_h1:
+                        st.write(f"**Date:** {r_date} | **Amount:** RS {amt}/-")
+                        st.write(f"**Current Payment:** {cur_status_str}")
+                    with col_h2:
+                        if st.button("🟢 Mark Paid", key=f"mark_paid_{r_id}"):
+                            conn = get_local_connection()
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE receipts SET payment_status='Paid' WHERE id=?", (r_id,))
+                            conn.commit()
+                            conn.close()
+                            sync_two_way()
+                            st.success(f"Consignment {cons} નો Status 'Paid' કરી દીધો છે!")
+                            st.rerun()
+                    with col_h3:
+                        if st.button("🔴 Mark Unpaid", key=f"mark_unpaid_{r_id}"):
+                            conn = get_local_connection()
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE receipts SET payment_status='Unpaid' WHERE id=?", (r_id,))
+                            conn.commit()
+                            conn.close()
+                            sync_two_way()
+                            st.warning(f"Consignment {cons} નો Status 'Unpaid' કરી દીધો છે!")
+                            st.rerun()
+                    with col_h4:
+                        if st.button("🗑️ Delete", key=f"del_cash_{r_id}"):
+                            conn = get_local_connection()
+                            cursor = conn.cursor()
+                            cursor.execute("DELETE FROM receipts WHERE id=?", (r_id,))
+                            conn.commit()
+                            conn.close()
 
-                    sconn = get_supabase_connection()
-                    if sconn:
-                        try:
-                            scur = sconn.cursor()
-                            scur.execute("DELETE FROM receipts WHERE cons_no=%s", (r[1],))
-                            sconn.commit()
-                            scur.close()
-                            sconn.close()
-                        except Exception: pass
+                            sconn = get_supabase_connection()
+                            if sconn:
+                                try:
+                                    scur = sconn.cursor()
+                                    scur.execute("DELETE FROM receipts WHERE cons_no=%s", (cons,))
+                                    sconn.commit()
+                                    scur.close()
+                                    sconn.close()
+                                except Exception: pass
 
-                    st.success(f"Consignment {r[1]} ડિલીટ થઈ ગયું છે!")
-                    st.rerun()
+                            st.success(f"Consignment {cons} ડિલીટ થઈ ગયું છે!")
+                            st.rerun()
+        else:
+            st.info("કોઈ કેશ બુકિંગ એન્ટ્રી ઉપલબ્ધ નથી.")
+            
     with tab3:
         st.subheader("🖨️ Re-Print / View Receipt by Consignment No")
         search_cons = st.text_input("Enter Consignment No to Print:")
@@ -820,16 +862,25 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
         cursor.execute("SELECT party_name, party_address, party_city, mobile FROM parties ORDER BY party_name ASC")
         parties_data = cursor.fetchall()
         conn.close()
-        party_names = [r[0] for r in parties_data]
+        
+        party_dict = {r[0]: {"address": r[1], "city": r[2], "mobile": r[3]} for r in parties_data}
+        party_names = list(party_dict.keys())
+
         if not party_names:
             st.warning("⚠️ પહેલા 'Add Account Party' પસંદ કરીને પાર્ટી ઉમેરો!")
         else:
-            selected_party = st.selectbox("Select Party Name:", party_names)
+            selected_party = st.selectbox("Select Party Name (પાર્ટી સિલેક્ટ કરો):", party_names)
+            
+            # Auto-fetch address and city from selected party dictionary
+            default_s_addr = party_dict[selected_party]["address"] if selected_party in party_dict else ""
+            default_s_city = party_dict[selected_party]["city"] if selected_party in party_dict else ""
+
             cr_uploaded_photo = st.file_uploader("📷 Auto-Scan Parcel Photo (બારકોડ & પિનકોડ ઓટો-ફિલ):", type=["jpg", "jpeg", "png"], key="cr_photo")
             cr_auto_cons = ""
             cr_auto_pin = ""
             if cr_uploaded_photo:
                 cr_auto_cons, cr_auto_pin = scan_label_image(cr_uploaded_photo.getvalue())
+            
             col1, col2 = st.columns(2)
             with col1:
                 cons_no = st.text_input("Consignment No:", value=cr_auto_cons, key="cr_cons")
@@ -839,15 +890,18 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 origin = st.text_input("Origin:", "BHAVNAGAR", key="cr_orig")
                 dest = st.text_input("Destination:", key="cr_dest")
             with col2:
-                sender_address = st.text_input("Sender Address:", key="cr_s_addr")
-                sender_city = st.text_input("Sender City/Pin:", key="cr_s_city")
+                # Sender address and city automatically populated from party master
+                sender_address = st.text_input("Sender Address (મોકલનારનું સરનામું):", value=default_s_addr, key="cr_s_addr")
+                sender_city = st.text_input("Sender City/Pin (શહેર/પીન):", value=default_s_city, key="cr_s_city")
                 rec_name = st.text_input("Recipient Name:", key="cr_r_name")
                 rec_address = st.text_input("Recipient Address:", key="cr_r_addr")
                 rec_city = st.text_input("Recipient City/Pin:", value=cr_auto_pin, key="cr_r_city")
+            
             col3, col4, col5 = st.columns(3)
             with col3: weight = st.text_input("Weight (Kg):", "1.0", key="cr_wt")
             with col4: pcs = st.text_input("Pieces (Pcs):", "1", key="cr_pcs")
             with col5: amount = st.text_input("Amount (RS):", key="cr_amt")
+            
             if st.button("💾 Save & Print Credit Booking", type="primary"):
                 if not cons_no or not rec_name or not amount:
                     st.error("મહેરબાની કરીને બધી માહિતી ભરો!")
@@ -926,7 +980,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                         st.rerun()
 
 # ----------------- ૪. DIGITAL MONTHLY BILLING -----------------
-elif menu == "📊 Party Monthly Billing (ડિજિટલ PDF બિલ)":
+elif menu == "📊 Party Monthly Billing (ડિજિટલ પીડીએફ બિલ)":
     st.subheader("📊 Party Digital PDF Invoice Generator & WhatsApp Share")
     st.info(f"📅 પસંદ કરેલ બિલિંગ સમયગાળો: **{start_str}** થી **{end_str}**")
     conn = get_local_connection()
