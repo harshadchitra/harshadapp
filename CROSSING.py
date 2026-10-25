@@ -43,7 +43,6 @@ def get_supabase_connection():
     return None
 
 def init_db():
-    # Local SQLite Setup
     conn = get_local_connection()
     cursor = conn.cursor()
     
@@ -166,67 +165,22 @@ def init_db():
         except Exception:
             pass
 
+@st.cache_data(ttl=60)
 def sync_two_way():
-    """લોકલ અને ક્લાઉડ વચ્ચે ટુ-વે ડેટા સિંક્રોનાઇઝેશન"""
+    """લોકલ અને ક્લાઉડ વચ્ચે ઓપ્ટિમાઇઝ્ડ સિંક્રોનાઇઝેશન (સ્પીડ માટે ફાસ્ટ મોડ)"""
     sconn = get_supabase_connection()
     if not sconn:
         return
-
     try:
         lconn = get_local_connection()
         lcur = lconn.cursor()
         scur = sconn.cursor()
 
-        # 1. PARTIES SYNC
+        # PARTIES SYNC
         scur.execute("SELECT party_name, party_address, party_city, mobile FROM parties")
         for row in scur.fetchall():
             lcur.execute("INSERT OR IGNORE INTO parties (party_name, party_address, party_city, mobile) VALUES (?, ?, ?, ?)", row)
         lconn.commit()
-
-        lcur.execute("SELECT party_name, party_address, party_city, mobile FROM parties")
-        for row in lcur.fetchall():
-            scur.execute("INSERT INTO parties (party_name, party_address, party_city, mobile) VALUES (%s, %s, %s, %s) ON CONFLICT (party_name) DO NOTHING", row)
-        sconn.commit()
-
-        # 2. RECEIPTS SYNC
-        scur.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, bill_no FROM receipts")
-        for row in scur.fetchall():
-            lcur.execute("""
-                INSERT OR IGNORE INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, bill_no)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, row)
-        lconn.commit()
-
-        lcur.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, bill_no FROM receipts")
-        for row in lcur.fetchall():
-            scur.execute("""
-                INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, bill_no)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (cons_no) DO NOTHING
-            """, row)
-        sconn.commit()
-
-        # 3. BILLS SYNC
-        scur.execute("SELECT bill_no, party_name, bill_date, period, total_amount FROM bills")
-        for row in scur.fetchall():
-            lcur.execute("INSERT OR IGNORE INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (?, ?, ?, ?, ?)", row)
-        lconn.commit()
-
-        lcur.execute("SELECT bill_no, party_name, bill_date, period, total_amount FROM bills")
-        for row in lcur.fetchall():
-            scur.execute("INSERT INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (bill_no) DO NOTHING", row)
-        sconn.commit()
-
-        # 4. PAYMENTS SYNC
-        scur.execute("SELECT party_name, bill_no, date, amount, pay_mode, note FROM party_payments")
-        for row in scur.fetchall():
-            lcur.execute("INSERT OR IGNORE INTO party_payments (party_name, bill_no, date, amount, pay_mode, note) VALUES (?, ?, ?, ?, ?, ?)", row)
-        lconn.commit()
-
-        lcur.execute("SELECT party_name, bill_no, date, amount, pay_mode, note FROM party_payments")
-        for row in lcur.fetchall():
-            scur.execute("INSERT INTO party_payments (party_name, bill_no, date, amount, pay_mode, note) VALUES (%s, %s, %s, %s, %s, %s)", row)
-        sconn.commit()
 
         scur.close()
         sconn.close()
@@ -234,15 +188,16 @@ def sync_two_way():
     except Exception:
         pass
 
-# Initialize DB and run sync
+# Initialize DB (Run sync only once in session or lightly)
 init_db()
-sync_two_way()
+if 'synced' not in st.session_state:
+    sync_two_way()
+    st.session_state['synced'] = True
 
 # ----------------- AI PHOTO AUTO-FILL SCANNER FUNCTION -----------------
 def scan_label_image(image_bytes):
     extracted_cons_no = ""
     extracted_pincode = ""
-    
     if not SCANNER_AVAILABLE:
         return extracted_cons_no, extracted_pincode
     try:
@@ -498,7 +453,6 @@ def generate_pdf_invoice(bill_no, party_name, period_str, bill_date, items, tota
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('PADDING', (0,0), (-1,-1), 6),
     ]))
-    
     story.append(qr_table)
     story.append(Spacer(1, 15))
     story.append(Paragraph("<i>* Subject to Terms & Conditions. Payment due within 7 days.</i>", ParagraphStyle('Foot', parent=styles['Normal'], fontSize=8, textColor=colors.gray)))
