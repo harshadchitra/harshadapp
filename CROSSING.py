@@ -106,7 +106,6 @@ def init_db():
     for c_name, c_url in default_couriers:
         cursor.execute("INSERT OR IGNORE INTO couriers (courier_name, tracking_url) VALUES (?, ?)", (c_name, c_url))
 
-    # અલગથી પેકિંગ રિસીપ્ટ માટેનું ટેબલ
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS packing_receipts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -145,7 +144,6 @@ def init_db():
 
 init_db()
 
-# ----------------- સેવ ફંક્શન -----------------
 def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
     conn = get_local_connection()
     cursor = conn.cursor()
@@ -156,7 +154,6 @@ def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
     conn.commit()
     conn.close()
 
-# ----------------- AI PHOTO AUTO-FILL SCANNER -----------------
 def scan_label_image(image_bytes):
     extracted_cons_no = ""
     extracted_pincode = ""
@@ -178,7 +175,6 @@ def scan_label_image(image_bytes):
         pass
     return extracted_cons_no, extracted_pincode
 
-# ----------------- WHATSAPP LINK -----------------
 def create_whatsapp_link(phone_num, msg_text):
     clean_phone = ''.join(filter(str.isdigit, str(phone_num)))
     if len(clean_phone) == 10:
@@ -186,7 +182,6 @@ def create_whatsapp_link(phone_num, msg_text):
     encoded_text = urllib.parse.quote(msg_text)
     return f"https://api.whatsapp.com/send?phone={clean_phone}&text={encoded_text}"
 
-# ----------------- HD PDF RECEIPT WITH PACKING & TRACKING -----------------
 def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, packing_info="None", packing_charge="0", tracking_url="", img_bytes=None):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=25, leftMargin=25, topMargin=20, bottomMargin=20)
@@ -334,7 +329,6 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     buffer.seek(0)
     return buffer.getvalue()
 
-# અલગથી પેકિંગ રિસીપ્ટ પીડીએફ જનરેટર
 def generate_packing_pdf_receipt(receipt_no, date, customer_name, mobile, items_desc, total_charge):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
@@ -693,79 +687,78 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & પે�
                 else:
                     st.error("કોઈ એન્ટ્રી મળી નથી!")
 
-# ----------------- ૪. SEPARATE PACKING SERVICE MENU (NEW) -----------------
+# ----------------- ૪. SEPARATE PACKING SERVICE MENU (FIXED) -----------------
 elif menu == "📦 Separate Packing Service (અલગ પેકિંગ સર્વિસ રિસીપ્ટ)":
     st.subheader("📦 Separate Packing Service & Material Billing")
     st.info("💡 અહીંથી તમે કોઈપણ ગ્રાહકને કુરિયર વગર ખાલી પેકિંગ મટીરીયલ (બોક્સ, સેલોટેપ, ઓનલાઈન બેગ વગેરે) કે સર્વિસનું અલગથી બિલ કે રિસીપ્ટ બનાવી આપી શકો છો.")
 
-    with st.form("sep_packing_form"):
-        cust_name = st.text_input("Customer Name (ગ્રાહકનું નામ):")
-        cust_mob = st.text_input("Mobile No (મોબાઈલ નંબર):")
-        pack_date = st.text_input("Date:", value=today.strftime("%d/%m/%Y"))
-        
-        st.write("---")
-        st.write("### પેકિંગ મટીરીયલ અને આઇટમ્સ સિલેક્ટ કરો:")
-        col_p1, col_p2 = st.columns(2)
-        with col_p1:
-            item_box = st.checkbox("Box Packing (બોક્સ પૅકિંગ)")
-            item_tape = st.checkbox("Cellotape (સેલોટેપ)")
-        with col_p2:
-            item_bag = st.checkbox("Online Bag (ઓનલાઈન બેગ)")
-            item_other = st.checkbox("Other Material (અન્ય મટીરીયલ)")
+    # એરર દૂર કરવા માટે st.form ને હટાવીને સાદા ઇનપુટ અને બટન મૂક્યા છે
+    cust_name = st.text_input("Customer Name (ગ્રાહકનું નામ):", key="sep_cust_name")
+    cust_mob = st.text_input("Mobile No (મોબાઈલ નંબર):", key="sep_cust_mob")
+    pack_date = st.text_input("Date:", value=today.strftime("%d/%m/%Y"), key="sep_pack_date")
+    
+    st.markdown("---")
+    st.write("### પેકિંગ મટીરીયલ અને આઇટમ્સ સિલેક્ટ કરો:")
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        item_box = st.checkbox("Box Packing (બોક્સ પૅકિંગ)")
+        item_tape = st.checkbox("Cellotape (સેલોટેપ)")
+    with col_p2:
+        item_bag = st.checkbox("Online Bag (ઓનલાઈન બેગ)")
+        item_other = st.checkbox("Other Material (અન્ય મટીરીયલ)")
 
-        custom_items_desc = st.text_input("Custom Details / Notes (વિગત લખો - દા.ત. 2 Large Box, 1 Tape):")
-        total_pack_charge = st.text_input("Total Packing Charge (કુલ પેકિંગ ચાર્જ RS):", "50")
+    custom_items_desc = st.text_input("Custom Details / Notes (વિગત લખો - દા.ત. 2 Large Box, 1 Tape):", key="sep_custom_desc")
+    total_pack_charge = st.text_input("Total Packing Charge (કુલ પેકિંગ ચાર્જ RS):", "50", key="sep_total_charge")
 
-        submit_sep_pack = st.form_submit_button("💾 Save & Generate Packing Receipt", type="primary")
+    if st.button("💾 Save & Generate Packing Receipt", type="primary", key="sep_save_btn"):
+        if not cust_name.strip() or not total_pack_charge.strip():
+            st.error("મહેરબાની કરીને ગ્રાહકનું નામ અને પેકિંગ ચાર્જ ભરો!")
+        else:
+            selected_items = []
+            if item_box: selected_items.append("Box Packing")
+            if item_tape: selected_items.append("Cellotape")
+            if item_bag: selected_items.append("Online Bag")
+            if item_other: selected_items.append("Other")
+            if custom_items_desc: selected_items.append(custom_items_desc)
+            
+            items_str = ", ".join(selected_items) if selected_items else "General Packing"
 
-        if submit_sep_pack:
-            if not cust_name.strip() or not total_pack_charge.strip():
-                st.error("મહેરબાની કરીને ગ્રાહકનું નામ અને પેકિંગ ચાર્જ ભરો!")
-            else:
-                selected_items = []
-                if item_box: selected_items.append("Box Packing")
-                if item_tape: selected_items.append("Cellotape")
-                if item_bag: selected_items.append("Online Bag")
-                if item_other: selected_items.append("Other")
-                if custom_items_desc: selected_items.append(custom_items_desc)
-                
-                items_str = ", ".join(selected_items) if selected_items else "General Packing"
+            conn = get_local_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM packing_receipts")
+            p_count = cursor.fetchone()[0] + 1
+            rec_no = f"PACK-REC-{p_count:04d}"
 
-                conn = get_local_connection()
-                cursor = conn.cursor()
-                cursor.execute("SELECT COUNT(*) FROM packing_receipts")
-                p_count = cursor.fetchone()[0] + 1
-                rec_no = f"PACK-REC-{p_count:04d}"
+            cursor.execute("""
+                INSERT INTO packing_receipts (receipt_no, date, customer_name, mobile, packing_items, total_charge)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (rec_no, pack_date.strip(), cust_name.strip(), cust_mob.strip(), items_str, total_pack_charge.strip()))
+            conn.commit()
+            conn.close()
 
-                cursor.execute("""
-                    INSERT INTO packing_receipts (receipt_no, date, customer_name, mobile, packing_items, total_charge)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (rec_no, pack_date.strip(), cust_name.strip(), cust_mob.strip(), items_str, total_pack_charge.strip()))
-                conn.commit()
-                conn.close()
+            st.success(f"પેકિંગ રિસીપ્ટ સફળતાપૂર્વક બની ગઈ છે! [Receipt No: {rec_no}]")
+            
+            pdf_pack_bytes = generate_packing_pdf_receipt(rec_no, pack_date, cust_name, cust_mob, items_str, total_pack_charge)
+            st.download_button(
+                label="📄 Download Packing Receipt PDF",
+                data=pdf_pack_bytes,
+                file_name=f"Packing_Receipt_{rec_no}_{cust_name}.pdf",
+                mime="application/pdf",
+                type="primary",
+                key="dl_sep_pack_pdf"
+            )
 
-                st.success(f"પેકિંગ રિસીપ્ટ સફળતાપૂર્વક બની ગઈ છે! [Receipt No: {rec_no}]")
-                
-                pdf_pack_bytes = generate_packing_pdf_receipt(rec_no, pack_date, cust_name, cust_mob, items_str, total_pack_charge)
-                st.download_button(
-                    label="📄 Download Packing Receipt PDF",
-                    data=pdf_pack_bytes,
-                    file_name=f"Packing_Receipt_{rec_no}_{cust_name}.pdf",
-                    mime="application/pdf",
-                    type="primary"
+            if cust_mob.strip():
+                wa_pack_msg = (
+                    "📦 COURIER SOLUTION - PACKING RECEIPT\n\n"
+                    f"Customer: {cust_name}\n"
+                    f"Receipt No: {rec_no}\n"
+                    f"Items: {items_str}\n"
+                    f"Total Amount: RS {total_pack_charge}/-\n\n"
+                    "Thank you for visiting Courier Solution!"
                 )
-
-                if cust_mob.strip():
-                    wa_pack_msg = (
-                        "📦 COURIER SOLUTION - PACKING RECEIPT\n\n"
-                        f"Customer: {cust_name}\n"
-                        f"Receipt No: {rec_no}\n"
-                        f"Items: {items_str}\n"
-                        f"Total Amount: RS {total_pack_charge}/-\n\n"
-                        "Thank you for visiting Courier Solution!"
-                    )
-                    wa_p_url = create_whatsapp_link(cust_mob.strip(), wa_pack_msg)
-                    st.markdown(f'<a href="{wa_p_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Send Packing Receipt on WhatsApp</a>', unsafe_allow_html=True)
+                wa_p_url = create_whatsapp_link(cust_mob.strip(), wa_pack_msg)
+                st.markdown(f'<a href="{wa_p_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Send Packing Receipt on WhatsApp</a>', unsafe_allow_html=True)
 
     st.markdown("---")
     st.subheader("📜 Previous Packing Receipts History")
