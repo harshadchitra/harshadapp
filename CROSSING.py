@@ -207,9 +207,9 @@ if 'synced' not in st.session_state:
     sync_two_way()
     st.session_state['synced'] = True
 
-# Helper function to save to both Local and Supabase Cloud (દૂર કરેલ એરર સાથે સુધારેલું ફંક્શન)
+# Helper function to save to both Local and Supabase Cloud (સુધારેલું ફંક્શન - એરર મુક્ત)
 def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
-    # Local Save
+    # Local Save (SQLite)
     conn = get_local_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -219,7 +219,7 @@ def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
     conn.commit()
     conn.close()
 
-    # Supabase Cloud Save
+    # Supabase Cloud Save (PostgreSQL)
     sconn = get_supabase_connection()
     if sconn:
         try:
@@ -227,13 +227,29 @@ def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
             scur.execute("""
                 INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, bill_no, payment_status)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (cons_no) DO NOTHING
-            """, data_tuple[:16] + (None, data_tuple[17]))
+                ON CONFLICT (cons_no) DO UPDATE SET 
+                    date = EXCLUDED.date,
+                    courier_co = EXCLUDED.courier_co,
+                    mode = EXCLUDED.mode,
+                    origin = EXCLUDED.origin,
+                    dest = EXCLUDED.dest,
+                    sender_name = EXCLUDED.sender_name,
+                    sender_address = EXCLUDED.sender_address,
+                    sender_city = EXCLUDED.sender_city,
+                    rec_name = EXCLUDED.rec_name,
+                    rec_address = EXCLUDED.rec_address,
+                    rec_city = EXCLUDED.rec_city,
+                    weight = EXCLUDED.weight,
+                    pcs = EXCLUDED.pcs,
+                    amount = EXCLUDED.amount,
+                    booking_type = EXCLUDED.booking_type,
+                    payment_status = EXCLUDED.payment_status
+            """, data_tuple)
             sconn.commit()
             scur.close()
             sconn.close()
-        except Exception:
-            pass
+        except Exception as e:
+            print("Cloud Save Error:", e)
 
 # ----------------- AI PHOTO AUTO-FILL SCANNER FUNCTION -----------------
 def scan_label_image(image_bytes):
