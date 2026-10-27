@@ -207,9 +207,9 @@ if 'synced' not in st.session_state:
     sync_two_way()
     st.session_state['synced'] = True
 
-# ----------------- 100% સુધારેલું અને પરફેક્ટ સેવ ફંક્શન -----------------
+# ----------------- 100% એરર મુક્ત સેવ ફંક્શન -----------------
 def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
-    # Local Save (SQLite) - 18 Columns + img_bytes
+    # 1. Local Save (SQLite) - 18 Columns + img_bytes
     conn = get_local_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -219,13 +219,11 @@ def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
     conn.commit()
     conn.close()
 
-    # Supabase Cloud Save (PostgreSQL) - બરાબર 18 વેલ્યુઝ અને 18 `%s` પ્લેસહોલ્ડર્સ
+    # 2. Supabase Cloud Save (PostgreSQL) - Exactly 19 values matching data_tuple
     sconn = get_supabase_connection()
     if sconn:
         try:
             scur = sconn.cursor()
-            # data_tuple માંથી બરાબર પહેલા 18 તત્વો લો (જેથી એરર જ ન આવે)
-            cloud_data = data_tuple[:18]
             scur.execute("""
                 INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, bill_no, payment_status)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -246,7 +244,7 @@ def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
                     amount = EXCLUDED.amount,
                     booking_type = EXCLUDED.booking_type,
                     payment_status = EXCLUDED.payment_status
-            """, cloud_data)
+            """, data_tuple)
             sconn.commit()
             scur.close()
             sconn.close()
