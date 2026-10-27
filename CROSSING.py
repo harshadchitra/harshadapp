@@ -988,7 +988,6 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
             if search_cons.strip():
                 conn = get_local_connection()
                 cursor = conn.cursor()
-                # અહીં પાર્સલ ફોટો પણ પરફેક્ટલી ફેચ થાય તે સુધારો કરી દીધો છે
                 cursor.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, parcel_img FROM receipts WHERE cons_no=?", (search_cons.strip(),))
                 rec_data = cursor.fetchone()
                 conn.close()
@@ -1039,7 +1038,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 sender_city = st.text_input("Sender City/Pin (શહેર/પીન):", value=default_s_city, key=f"cr_s_city_{selected_party}")
                 rec_name = st.text_input("Recipient Name:", key="cr_r_name")
                 rec_address = st.text_input("Recipient Address:", key="cr_r_addr")
-                rec_city = st.text_input("Recipient City/Pin:", value=auto_pin, key="cr_r_city")
+                rec_city = st.text_input("Recipient City/Pin:", value=cr_auto_pin, key="cr_r_city")
             
             col3, col4, col5 = st.columns(3)
             with col3: weight = st.text_input("Weight (Kg):", "1.0", key="cr_wt")
