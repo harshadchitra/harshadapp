@@ -13,7 +13,6 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics.barcode import code128, qr
 
-
 # Optional AI / OCR Scanner Libraries
 try:
     import cv2
@@ -24,18 +23,14 @@ try:
 except ImportError:
     SCANNER_AVAILABLE = False
 
-
 # Page Configuration
 st.set_page_config(page_title="Courier Solution", page_icon="📦", layout="centered")
-
 
 # ----------------- 🔄 ક્લાઉડ સુપાબેઝ હાઇબ્રિડ ડેટાબેઝ સેટઅપ -----------------
 LOCAL_DB = "courier_database.db"
 
-
 def get_local_connection():
     return sqlite3.connect(LOCAL_DB, check_same_thread=False)
-
 
 def get_supabase_connection():
     try:
@@ -46,7 +41,6 @@ def get_supabase_connection():
     except Exception:
         return None
     return None
-
 
 def init_db():
     conn = get_local_connection()
@@ -71,7 +65,6 @@ def init_db():
             pcs TEXT,
             amount TEXT,
             booking_type TEXT,
-            bill_no TEXT,
             parcel_img BLOB,
             payment_status TEXT DEFAULT 'Unpaid'
         )
@@ -82,7 +75,6 @@ def init_db():
         conn.commit()
     except Exception:
         pass
-
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS parties (
@@ -117,7 +109,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-
     sconn = get_supabase_connection()
     if sconn:
         try:
@@ -141,7 +132,6 @@ def init_db():
                     pcs TEXT,
                     amount TEXT,
                     booking_type TEXT,
-                    bill_no TEXT,
                     payment_status TEXT DEFAULT 'Unpaid'
                 )
             """)
@@ -181,7 +171,6 @@ def init_db():
         except Exception:
             pass
 
-
 @st.cache_data(ttl=10)
 def sync_two_way():
     sconn = get_supabase_connection()
@@ -192,15 +181,13 @@ def sync_two_way():
         lcur = lconn.cursor()
         scur = sconn.cursor()
 
-
         scur.execute("SELECT party_name, party_address, party_city, mobile FROM parties")
         for row in scur.fetchall():
             lcur.execute("INSERT OR IGNORE INTO parties (party_name, party_address, party_city, mobile) VALUES (?, ?, ?, ?)", row)
         
-        scur.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, bill_no, payment_status FROM receipts")
+        scur.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, payment_status FROM receipts")
         for row in scur.fetchall():
-            lcur.execute("INSERT OR IGNORE INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, bill_no, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
-
+            lcur.execute("INSERT OR IGNORE INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
 
         lconn.commit()
         scur.close()
@@ -209,12 +196,10 @@ def sync_two_way():
     except Exception:
         pass
 
-
 init_db()
 if 'synced' not in st.session_state:
     sync_two_way()
     st.session_state['synced'] = True
-
 
 # ----------------- 100% એરર મુક્ત ફાઈનલ સેવ ફંક્શન -----------------
 def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
@@ -228,35 +213,14 @@ def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
     conn.commit()
     conn.close()
 
-
-    # 2. Supabase Cloud Save (PostgreSQL) - Exact 18 values matching cloud table columns
+    # 2. Supabase Cloud Save (PostgreSQL) - Exactly 18 values matching data_tuple
     sconn = get_supabase_connection()
     if sconn:
         try:
             scur = sconn.cursor()
-            cloud_tuple = (
-                data_tuple[0],  # cons_no
-                data_tuple[1],  # date
-                data_tuple[2],  # courier_co
-                data_tuple[3],  # mode
-                data_tuple[4],  # origin
-                data_tuple[5],  # dest
-                data_tuple[6],  # sender_name
-                data_tuple[7],  # sender_address
-                data_tuple[8],  # sender_city
-                data_tuple[9],  # rec_name
-                data_tuple[10], # rec_address
-                data_tuple[11], # rec_city
-                data_tuple[12], # weight
-                data_tuple[13], # pcs
-                data_tuple[14], # amount
-                data_tuple[15], # booking_type
-                data_tuple[16], # bill_no
-                data_tuple[17]  # payment_status
-            )
             scur.execute("""
-                INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, bill_no, payment_status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, payment_status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (cons_no) DO UPDATE SET 
                     date = EXCLUDED.date,
                     courier_co = EXCLUDED.courier_co,
@@ -274,13 +238,12 @@ def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
                     amount = EXCLUDED.amount,
                     booking_type = EXCLUDED.booking_type,
                     payment_status = EXCLUDED.payment_status
-            """, cloud_tuple)
+            """, data_tuple)
             sconn.commit()
             scur.close()
             sconn.close()
         except Exception as e:
             print("Cloud Save Error:", e)
-
 
 # ----------------- AI PHOTO AUTO-FILL SCANNER FUNCTION -----------------
 def scan_label_image(image_bytes):
@@ -304,7 +267,6 @@ def scan_label_image(image_bytes):
         pass
     return extracted_cons_no, extracted_pincode
 
-
 # ----------------- WHATSAPP LINK GENERATOR FUNCTION -----------------
 def create_whatsapp_link(phone_num, msg_text):
     clean_phone = ''.join(filter(str.isdigit, str(phone_num)))
@@ -312,7 +274,6 @@ def create_whatsapp_link(phone_num, msg_text):
         clean_phone = "91" + clean_phone
     encoded_text = urllib.parse.quote(msg_text)
     return f"https://api.whatsapp.com/send?phone={clean_phone}&text={encoded_text}"
-
 
 # ----------------- PDF RECEIPT GENERATOR WITH LARGE PARCEL PHOTO -----------------
 def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, img_bytes=None):
@@ -425,7 +386,6 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     buffer.seek(0)
     return buffer.getvalue()
 
-
 # ----------------- SUMMARY PDF REPORT GENERATOR -----------------
 def generate_summary_pdf_report(title_text, period_str, headers, rows, total_amt_str):
     buffer = io.BytesIO()
@@ -464,7 +424,6 @@ def generate_summary_pdf_report(title_text, period_str, headers, rows, total_amt
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
-
 
 # ----------------- BILL PDF INVOICE GENERATOR WITH UPI -----------------
 def generate_pdf_invoice(bill_no, party_name, period_str, bill_date, items, total_amount):
@@ -563,7 +522,6 @@ def generate_pdf_invoice(bill_no, party_name, period_str, bill_date, items, tota
     buffer.seek(0)
     return buffer.getvalue()
 
-
 # ----------------- PAYMENT RECEIPT PDF GENERATOR -----------------
 def generate_payment_pdf_receipt(rec_id, party_name, bill_no, pay_date, pay_amount, pay_mode, pay_note):
     buffer = io.BytesIO()
@@ -607,7 +565,6 @@ def generate_payment_pdf_receipt(rec_id, party_name, bill_no, pay_date, pay_amou
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
-
 
 # ----------------- BILLS SUMMARY PDF REPORT -----------------
 def generate_bills_summary_pdf(all_bills, period_str):
@@ -660,7 +617,6 @@ def generate_bills_summary_pdf(all_bills, period_str):
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
-
 
 # ----------------- PAYMENT RECEIVED SUMMARY PDF REPORT -----------------
 def generate_payments_summary_pdf(pay_rows, period_str):
@@ -716,12 +672,10 @@ def generate_payments_summary_pdf(pay_rows, period_str):
     buffer.seek(0)
     return buffer.getvalue()
 
-
 # ----------------- DASHBOARD UI -----------------
 st.title("📦 COURIER SOLUTION")
 st.caption("Express Cargo & Logistics Management System")
 st.markdown("---")
-
 
 # SIDEBAR NAVIGATION
 st.sidebar.header("⚙️ નેવિગેશન & ફિલ્ટર")
@@ -742,13 +696,11 @@ end_date = st.sidebar.date_input("છેલ્લી તારીખ (To Date):"
 start_str = start_date.strftime("%d/%m/%Y")
 end_str = end_date.strftime("%d/%m/%Y")
 
-
 # ----------------- ૧. ADD PARTY MASTER -----------------
 if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
     st.subheader("➕ Add & Manage Monthly Account Parties")
     if 'edit_party_id' not in st.session_state:
         st.session_state['edit_party_id'] = None
-
 
     conn = get_local_connection()
     cursor = conn.cursor()
@@ -757,14 +709,12 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
         cursor.execute("SELECT id, party_name, party_address, party_city, mobile FROM parties WHERE id=?", (st.session_state['edit_party_id'],))
         edit_data = cursor.fetchone()
 
-
     with st.form("party_form"):
         st.write("### 📝 પાર્ટી ફોર્મ (નવી ઉમેરો અથવા એડિટ કરો)")
         p_name_val = edit_data[1] if edit_data else ""
         p_addr_val = edit_data[2] if edit_data else ""
         p_city_val = edit_data[3] if edit_data else ""
         p_mob_val = edit_data[4] if edit_data else ""
-
 
         p_name = st.text_input("Party Name (પાર્ટીનું નામ):", value=p_name_val)
         p_addr = st.text_input("Address (સરનામું):", value=p_addr_val)
@@ -777,11 +727,9 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
         with col_f2:
             cancel_edit = st.form_submit_button("❌ Cancel Edit")
 
-
         if cancel_edit:
             st.session_state['edit_party_id'] = None
             st.rerun()
-
 
         if submit_p:
             if not p_name.strip():
@@ -813,14 +761,12 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
                         except Exception:
                             pass
 
-
                     st.success(f"પાર્ટી '{p_name}' સફળતાપૂર્વક સેવ થઈ ગઈ છે!")
                     sync_two_way()
                     st.rerun()
                 except sqlite3.IntegrityError:
                     st.error("આ નામની પાર્ટી પહેલેથી જ અસ્તિત્વમાં છે!")
     conn.close()
-
 
     st.markdown("---")
     st.write("### 🏢 સેવ થયેલી પાર્ટીઓની યાદી (Table View):")
@@ -839,7 +785,6 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
         header_cols[4].write("<b>એડિટ</b>", unsafe_allow_html=True)
         header_cols[5].write("<b>ડિલીટ</b>", unsafe_allow_html=True)
         st.markdown("---")
-
 
         for idx, r in enumerate(p_rows, 1):
             r_id, r_name, r_addr, r_city, r_mob = r
@@ -861,7 +806,6 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
                     conn.commit()
                     conn.close()
 
-
                     sconn = get_supabase_connection()
                     if sconn:
                         try:
@@ -872,12 +816,10 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
                             sconn.close()
                         except Exception: pass
 
-
                     st.success(f"પાર્ટી '{r_name}' ડિલીટ થઈ ગઈ છે!")
                     st.rerun()
     else:
         st.info("હજુ સુધી કોઈ પાર્ટી ઉમેરેલી નથી.")
-
 
 # ----------------- ૨. CASH BOOKING -----------------
 elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)":
@@ -893,7 +835,6 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
             auto_cons, auto_pin = scan_label_image(img_bytes_temp)
             if auto_cons or auto_pin:
                 st.success(f"🎯 સ્કેન સફળ! બારકોડ: {auto_cons} | પિનકોડ: {auto_pin}")
-
 
         col1, col2 = st.columns(2)
         with col1:
@@ -911,14 +852,12 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
             rec_address = st.text_input("Recipient Address:", key="c_r_addr")
             rec_city = st.text_input("Recipient City/Pin:", value=auto_pin, key="c_r_city")
 
-
         col3, col4, col5 = st.columns(3)
         with col3: weight = st.text_input("Weight (Kg):", "1.0", key="c_wt")
         with col4: pcs = st.text_input("Pieces (Pcs):", "1", key="c_pcs")
         with col5: amount = st.text_input("Total Amount (RS):", key="c_amt")
         c_whatsapp_num = st.text_input("Customer WhatsApp Mobile No (મોબાઈલ નંબર):", key="c_wa_num")
         c_initial_pay_status = st.selectbox("Payment Status (પેમેન્ટ સ્ટેટસ):", ["Paid (ચૂકવાઈ ગયું)", "Unpaid (બાકી)"], key="c_init_status")
-
 
         if st.button("💾 Save & Generate Cash Receipt", type="primary"):
             if not cons_no or not sender_name or not rec_name or not amount:
@@ -927,7 +866,8 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                 img_bytes = uploaded_photo.getvalue() if uploaded_photo else None
                 status_val = "Paid" if "Paid" in c_initial_pay_status else "Unpaid"
                 
-                data_tuple = (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), sender_name.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Cash', None, status_val)
+                # બરાબર 18 વેલ્યુઝ (None કાઢી નાખ્યું છે જેથી એરર ન આવે)
+                data_tuple = (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), sender_name.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Cash', status_val)
                 
                 try:
                     save_receipt_to_cloud_and_local(data_tuple, img_bytes)
@@ -954,7 +894,6 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                         st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Step 2: Send Confirmation on WhatsApp</a>', unsafe_allow_html=True)
                 except Exception as e:
                     st.error(f"એન્ટ્રી સેવ કરતી વખતે ભૂલ આવી: {e}")
-
 
     with tab2:
         st.subheader("📜 Cash Booking Records & Date-Wise Total Summary")
@@ -1030,7 +969,6 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                             conn.commit()
                             conn.close()
 
-
                             sconn = get_supabase_connection()
                             if sconn:
                                 try:
@@ -1041,12 +979,10 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                                     sconn.close()
                                 except Exception: pass
 
-
                             st.success(f"Consignment {cons} ડિલીટ થઈ ગયું છે!")
                             st.rerun()
         else:
             st.warning("આ તારીખની મર્યાદામાં કોઈ કેશ બુકિંગ એન્ટ્રી મળી નથી.")
-
 
     with tab3:
         st.subheader("🖨️ Re-Print / View Receipt by Consignment No")
@@ -1065,7 +1001,6 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
-
 # ----------------- ૩. CREDIT ACCOUNT BOOKING -----------------
 elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)":
     tab_cr1, tab_cr2, tab_cr3 = st.tabs(["📋 Credit Booking (નવી એન્ટ્રી)", "🖨️ Re-Print Credit Receipt", "📜 Credit History & View (હિસ્ટ્રી & સુધારો)"])
@@ -1080,14 +1015,12 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
         party_dict = {r[0]: {"address": r[1], "city": r[2], "mobile": r[3]} for r in parties_data}
         party_names = list(party_dict.keys())
 
-
         if not party_names:
             st.warning("⚠️ પહેલા 'Add Account Party' પસંદ કરીને પાર્ટી ઉમેરો!")
         else:
             selected_party = st.selectbox("Select Party Name (પાર્ટી સિલેક્ટ કરો):", party_names)
             default_s_addr = party_dict[selected_party]["address"] if selected_party in party_dict else ""
             default_s_city = party_dict[selected_party]["city"] if selected_party in party_dict else ""
-
 
             cr_uploaded_photo = st.file_uploader("📷 Auto-Scan Parcel Photo (બારકોડ & પિનકોડ ઓટો-ફિલ):", type=["jpg", "jpeg", "png"], key="cr_photo")
             cr_auto_cons = ""
@@ -1120,18 +1053,17 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                     st.error("મહેરબાની કરીને બધી માહિતી ભરો!")
                 else:
                     cr_img_bytes = cr_uploaded_photo.getvalue() if cr_uploaded_photo else None
-                    data_tuple = (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), selected_party.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Credit Account', None, 'Unpaid')
+                    # બરાબર 18 વેલ્યુઝ
+                    data_tuple = (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), selected_party.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Credit Account', 'Unpaid')
                     try:
                         save_receipt_to_cloud_and_local(data_tuple, cr_img_bytes)
                         st.success(f"Credit Entry Saved for '{selected_party}'")
                         sync_two_way()
 
-
                         pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, selected_party, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Credit Account', cr_img_bytes)
                         st.download_button(label="🖨️ Download Credit Receipt PDF", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
                     except Exception as e:
                         st.error(f"એન્ટ્રી સેવ કરતી વખતે ભૂલ આવી: {e}")
-
 
     with tab_cr2:
         st.subheader("🖨️ Re-Print Credit Receipt by Consignment No")
@@ -1149,7 +1081,6 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                     st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{search_cr_cons}.pdf", mime="application/pdf")
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
-
 
     with tab_cr3:
         st.subheader("📜 View Credit Account Bookings & Edit/Delete")
@@ -1178,7 +1109,6 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                         conn.commit()
                         conn.close()
 
-
                         sconn = get_supabase_connection()
                         if sconn:
                             try:
@@ -1189,10 +1119,8 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                                 sconn.close()
                             except Exception: pass
 
-
                         st.success(f"Consignment {cons} સફળતાપૂર્વક ડિલીટ થઈ ગયું છે!")
                         st.rerun()
-
 
 # ----------------- ૪. DIGITAL MONTHLY BILLING -----------------
 elif menu == "📊 Party Monthly Billing (ડિજિટલ પીડીએફ બિલ)":
@@ -1297,14 +1225,12 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ પીડીએફ 
                         conn.close()
                         sync_two_way()
 
-
                         pdf_bytes = generate_pdf_invoice(generated_bill_no, sel_party, f"{start_str} to {end_str}", today.strftime("%d/%m/%Y"), filtered_bill, tot_bill)
                         st.success(f"✅ પાર્ટી '{sel_party}' નું બિલ સફળતાપૂર્વક જનરેટ થઈ ગયું છે!")
                         st.download_button(label="📄 Step 1: Download Digital Invoice PDF", data=pdf_bytes, file_name=f"Invoice_{generated_bill_no}_{sel_party}.pdf", mime="application/pdf")
                     else:
                         conn.close()
                         st.info("કોઈ અનબિલ એન્ટ્રી મળી નથી.")
-
 
     st.markdown("---")
     st.subheader("📜 Generated Bills History & Delete")
@@ -1363,7 +1289,6 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ પીડીએફ 
                         conn.commit()
                         conn.close()
 
-
                         sconn = get_supabase_connection()
                         if sconn:
                             try:
@@ -1375,12 +1300,10 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ પીડીએફ 
                                 sconn.close()
                             except Exception: pass
 
-
                         st.success(f"બિલ નંબર {b_no} સફળતાપૂર્વક ડિલીટ થઈ ગયું છે!")
                         st.rerun()
     else:
         st.info("હજુ સુધી કોઈ બિલ જનરેટ થયેલ નથી.")
-
 
 # ----------------- ૫. PARTY PAYMENT RECEIVE -----------------
 elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & રસીદ)":
@@ -1420,7 +1343,6 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                 conn.commit()
                 conn.close()
                 sync_two_way()
-
 
                 st.success(f"✅ પાર્ટી '{pay_party}' ના RS {pay_amount}/- જમા થઈ ગયા છે!")
                 pay_pdf_bytes = generate_payment_pdf_receipt(rec_last_id, pay_party.strip(), target_bill_no, pay_date.strip(), pay_amount.strip(), pay_mode, pay_note.strip())
@@ -1473,7 +1395,6 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                     conn.commit()
                     conn.close()
 
-
                     sconn = get_supabase_connection()
                     if sconn:
                         try:
@@ -1484,13 +1405,11 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                             sconn.close()
                         except Exception: pass
 
-
                     st.success("પેમેન્ટ એન્ટ્રી સફળતાપૂર્વક ડિલીટ થઈ ગઈ છે!")
                     st.rerun()
         st.metric("💰 Total Payment Received", f"RS {tot_received:,.2f}/-")
     else:
         st.info("કોઈ પેમેન્ટ રિસીવ રેકોર્ડ મળેલ નથી.")
-
 
 # ----------------- ૬. SUMMARY & REPORTS -----------------
 elif menu == "📊 Summary & Reports (કેશ & ક્રેડિટ સમરી)":
