@@ -871,8 +871,9 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                     st.success(f"Cash Entry Saved Successfully for Consignment: {cons_no} [{status_val}]")
                     sync_two_way()
                     
+                    # અહીં ડાયરેક્ટ img_bytes પાસ કરી દીધા છે જેથી નવી રિસીપ્ટમાં ફોટો તરત આવી જાય
                     pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Cash', img_bytes)
-                    st.download_button(label="📄 Step 1: Download Printable PDF Receipt", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
+                    st.download_button(label="📄 Step 1: Download Printable PDF Receipt with Photo", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
                     
                     if c_whatsapp_num.strip():
                         wa_msg = (
@@ -898,7 +899,6 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
         
         conn = get_local_connection()
         cursor = conn.cursor()
-        # અહીં parcel_img પણ સિલેક્ટ કરી લીધું છે જેથી હિસ્ટ્રી કે એક્સપૅન્ડરમાંથી પ્રિન્ટ કાઢતી વખતે ફોટો મિસ ન થાય
         cursor.execute("SELECT id, cons_no, date, sender_name, rec_name, amount, payment_status, courier_co, mode, origin, dest, sender_address, sender_city, rec_address, rec_city, weight, pcs, parcel_img FROM receipts WHERE booking_type='Cash' ORDER BY id DESC")
         cash_rows = cursor.fetchall()
         conn.close()
@@ -939,7 +939,6 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                     with col_h1:
                         st.write(f"**Date:** {r_date} | **Amount:** RS {amt}/-")
                         st.write(f"**Current Payment:** {cur_status_str}")
-                        # હિસ્ટ્રીમાંથી ડાઉનલોડ બટન સાથે ફોટો પરફેક્ટ જોડ્યો છે
                         pdf_hist = generate_hd_receipt_pdf(cons, r_date, c_co, c_mode, orig, destination, s_name, s_addr, s_city, r_name, r_addr, r_city, wt, pcs, amt, 'Cash', p_img)
                         st.download_button("🖨️ Download Receipt PDF with Photo", data=pdf_hist, file_name=f"Receipt_{cons}.pdf", mime="application/pdf", key=f"dl_cash_hist_{r_id}")
                     with col_h2:
@@ -1042,7 +1041,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 sender_city = st.text_input("Sender City/Pin (શહેર/પીન):", value=default_s_city, key=f"cr_s_city_{selected_party}")
                 rec_name = st.text_input("Recipient Name:", key="cr_r_name")
                 rec_address = st.text_input("Recipient Address:", key="cr_r_addr")
-                rec_city = st.text_input("Recipient City/Pin:", value=cr_auto_pin, key="cr_r_city")
+                rec_city = st.text_input("Recipient City/Pin:", value=auto_pin, key="cr_r_city")
             
             col3, col4, col5 = st.columns(3)
             with col3: weight = st.text_input("Weight (Kg):", "1.0", key="cr_wt")
@@ -1060,8 +1059,9 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                         st.success(f"Credit Entry Saved for '{selected_party}'")
                         sync_two_way()
 
+                        # અહીં પણ cr_img_bytes સીધા પાસ કરી દીધા છે
                         pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, selected_party, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Credit Account', cr_img_bytes)
-                        st.download_button(label="🖨️ Download Credit Receipt PDF", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
+                        st.download_button(label="🖨️ Download Credit Receipt PDF with Photo", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
                     except Exception as e:
                         st.error(f"એન્ટ્રી સેવ કરતી વખતે ભૂલ આવી: {e}")
 
