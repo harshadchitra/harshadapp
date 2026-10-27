@@ -201,7 +201,7 @@ if 'synced' not in st.session_state:
     sync_two_way()
     st.session_state['synced'] = True
 
-# ----------------- 100% એરર મુક્ત ફાઈનલ સેવ ફંક્શન -----------------
+# ----------------- 100% એરર મુક્ત સેવ ફંક્શન -----------------
 def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
     conn = get_local_connection()
     cursor = conn.cursor()
@@ -384,7 +384,7 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     buffer.seek(0)
     return buffer.getvalue()
 
-# ----------------- SUMMARY PDF REPORT GENERATOR -----------------
+# ----------------- SUMMARY & BILL GENERATORS -----------------
 def generate_summary_pdf_report(title_text, period_str, headers, rows, total_amt_str):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -423,7 +423,6 @@ def generate_summary_pdf_report(title_text, period_str, headers, rows, total_amt
     buffer.seek(0)
     return buffer.getvalue()
 
-# ----------------- BILL PDF INVOICE GENERATOR WITH UPI -----------------
 def generate_pdf_invoice(bill_no, party_name, period_str, bill_date, items, total_amount):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -520,7 +519,6 @@ def generate_pdf_invoice(bill_no, party_name, period_str, bill_date, items, tota
     buffer.seek(0)
     return buffer.getvalue()
 
-# ----------------- PAYMENT RECEIPT PDF GENERATOR -----------------
 def generate_payment_pdf_receipt(rec_id, party_name, bill_no, pay_date, pay_amount, pay_mode, pay_note):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
@@ -564,7 +562,6 @@ def generate_payment_pdf_receipt(rec_id, party_name, bill_no, pay_date, pay_amou
     buffer.seek(0)
     return buffer.getvalue()
 
-# ----------------- BILLS SUMMARY PDF REPORT -----------------
 def generate_bills_summary_pdf(all_bills, period_str):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -616,7 +613,6 @@ def generate_bills_summary_pdf(all_bills, period_str):
     buffer.seek(0)
     return buffer.getvalue()
 
-# ----------------- PAYMENT RECEIVED SUMMARY PDF REPORT -----------------
 def generate_payments_summary_pdf(pay_rows, period_str):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -645,10 +641,10 @@ def generate_payments_summary_pdf(pay_rows, period_str):
         data.append([
             Paragraph(str(idx), normal_style),
             Paragraph(f"<b>{r[1]}</b>", normal_style),
-            Paragraph(str(r[2]), normal_style),
-            Paragraph(str(r[3]), normal_style),
-            Paragraph(str(r[5]), normal_style),
-            Paragraph(str(r[6]) if r[6] else "-", normal_style),
+            Paragraph(f"{r[2]}", normal_style),
+            Paragraph(f"{r[3]}", normal_style),
+            Paragraph(f"{r[5]}", normal_style),
+            Paragraph(f"{r[6] if r[6] else '-'}", normal_style),
             Paragraph(f"RS {amt_val:,.2f}", normal_style)
         ])
     data.append([
@@ -679,8 +675,8 @@ st.markdown("---")
 st.sidebar.header("⚙️ નેવિગેશન & ફિલ્ટર")
 menu = st.sidebar.radio("મેનુ પસંદ કરો (Menu)", [
     "➕ Add Account Party (પાર્ટી ઉમેરો)",
-    "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)",
-    "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)",
+    "💵 Cash Courier Booking (કેશ બુકિંગ & ફાસ્ટ ઓપન)",
+    "📋 Credit Account Booking (ક્રેડિટ બુકિંગ & ફાસ્ટ ઓપન)",
     "📊 Party Monthly Billing (ડિજિટલ પીડીએફ બિલ)",
     "💳 Party Payment Receive (પેમેન્ટ જમા & રસીદ)",
     "📊 Summary & Reports (કેશ & ક્રેડિટ સમરી)"
@@ -820,48 +816,84 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
         st.info("હજુ સુધી કોઈ પાર્ટી ઉમેરેલી નથી.")
 
 # ----------------- ૨. CASH BOOKING -----------------
-elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિસ્ટ્રી)":
-    tab1, tab2, tab3 = st.tabs(["💵 Cash Booking (નવી એન્ટ્રી)", "📜 Cash History & Date Filter (હિસ્ટ્રી & ટોટલ)", "🖨️ Re-Print Receipt (ફરીવાર પ્રિન્ટ)"])
+elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & ફાસ્ટ ઓપન)":
+    tab1, tab2 = st.tabs(["💵 Cash Booking & Fast Open (નવી એન્ટ્રી & ઓપન બટન)", "📜 Cash History & Filter (હિસ્ટ્રી & ટોટલ)"])
     with tab1:
-        st.subheader("Cash Courier Booking")
-        st.markdown("### 📷 Auto-Scan Label (સ્માર્ટ ફોટો સ્કેનર - બારકોડ & પિનકોડ ઓટો-ફિલ)")
+        st.subheader("Cash Courier Booking with Fast Open")
+        
+        # 🚀 અહીં તમે કીધેલું સ્પેશિયલ 'ઓપન' ફીચર ગોઠવી દીધું છે!
+        with st.container():
+            st.markdown("### 🔍 જૂનો કે નવો કન્સાઇનમેન્ટ નંબર નાખીને ડેટા 'Open' કરો:")
+            col_s_box1, col_s_box2 = st.columns([3, 1])
+            with col_s_box1:
+                quick_search_cons = st.text_input("Consignment No Search:", placeholder="ગમે તે જૂનો Cons. No નાખો...", label_visibility="collapsed", key="quick_c_search")
+            with col_s_box2:
+                fast_open_btn = st.button("📂 Open (ઓપન)", type="secondary")
+            
+            if fast_open_btn and quick_search_cons.strip():
+                conn = get_local_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, payment_status, parcel_img FROM receipts WHERE cons_no=?", (quick_search_cons.strip(),))
+                loaded_rec = cursor.fetchone()
+                conn.close()
+                if loaded_rec:
+                    st.session_state['loaded_c_data'] = loaded_rec
+                    st.success(f"🎯 કન્સાઇનમેન્ટ '{loaded_rec[0]}' નો ડેટા સફળતાપૂર્વક લોડ થઈ ગયો છે!")
+                else:
+                    st.error("આ કન્સાઇનમેન્ટ નંબરનો કોઈ ડેટા મળ્યો નથી!")
+
+        # જો ડેટા લોડ થયો હોય તો વેલ્યુ સેટ કરો, નહીંતર ખાલી રાખો
+        c_data_store = st.session_state.get('loaded_c_data', None)
+        
+        st.markdown("---")
+        st.markdown("### 📷 Auto-Scan Label (ઓટો-ફિલ સ્કેનર)")
         uploaded_photo = st.file_uploader("પાર્સલ/લેબલનો ફોટો લો અથવા અપલોડ કરો:", type=["jpg", "jpeg", "png"], key="c_photo")
-        auto_cons = ""
+        auto_cons = c_data_store[0] if c_data_store else ""
         auto_pin = ""
         if uploaded_photo:
             img_bytes_temp = uploaded_photo.getvalue()
-            auto_cons, auto_pin = scan_label_image(img_bytes_temp)
-            if auto_cons or auto_pin:
-                st.success(f"🎯 સ્કેન સફળ! બારકોડ: {auto_cons} | પિનકોડ: {auto_pin}")
+            sc_cons, sc_pin = scan_label_image(img_bytes_temp)
+            if sc_cons: auto_cons = sc_cons
+            if sc_pin: auto_pin = sc_pin
 
         col1, col2 = st.columns(2)
         with col1:
-            cons_no = st.text_input("Consignment No:", value=auto_cons, key="c_cons")
-            date_entry = st.text_input("Date:", value=today.strftime("%d/%m/%Y"), key="c_date")
-            courier_co = st.text_input("Courier Company:", "DTDC", key="c_co")
-            mode = st.text_input("Service Mode:", "Surface", key="c_mode")
-            origin = st.text_input("Origin:", "BHAVNAGAR", key="c_orig")
-            dest = st.text_input("Destination:", key="c_dest")
+            cons_no = st.text_input("Consignment No:", value=auto_cons if auto_cons else (c_data_store[0] if c_data_store else ""), key="c_cons")
+            date_entry = st.text_input("Date:", value=c_data_store[1] if c_data_store else today.strftime("%d/%m/%Y"), key="c_date")
+            courier_co = st.text_input("Courier Company:", value=c_data_store[2] if c_data_store else "DTDC", key="c_co")
+            mode = st.text_input("Service Mode:", value=c_data_store[3] if c_data_store else "Surface", key="c_mode")
+            origin = st.text_input("Origin:", value=c_data_store[4] if c_data_store else "BHAVNAGAR", key="c_orig")
+            dest = st.text_input("Destination:", value=c_data_store[5] if c_data_store else "", key="c_dest")
         with col2:
-            sender_name = st.text_input("Sender Name:", key="c_s_name")
-            sender_address = st.text_input("Sender Address:", key="c_s_addr")
-            sender_city = st.text_input("Sender City/Pin:", key="c_s_city")
-            rec_name = st.text_input("Recipient Name:", key="c_r_name")
-            rec_address = st.text_input("Recipient Address:", key="c_r_addr")
-            rec_city = st.text_input("Recipient City/Pin:", value=auto_pin, key="c_r_city")
+            sender_name = st.text_input("Sender Name:", value=c_data_store[6] if c_data_store else "", key="c_s_name")
+            sender_address = st.text_input("Sender Address:", value=c_data_store[7] if c_data_store else "", key="c_s_addr")
+            sender_city = st.text_input("Sender City/Pin:", value=c_data_store[8] if c_data_store else "", key="c_s_city")
+            rec_name = st.text_input("Recipient Name:", value=c_data_store[9] if c_data_store else "", key="c_r_name")
+            rec_address = st.text_input("Recipient Address:", value=c_data_store[10] if c_data_store else "", key="c_r_addr")
+            rec_city = st.text_input("Recipient City/Pin:", value=auto_pin if auto_pin else (c_data_store[11] if c_data_store else ""), key="c_r_city")
 
         col3, col4, col5 = st.columns(3)
-        with col3: weight = st.text_input("Weight (Kg):", "1.0", key="c_wt")
-        with col4: pcs = st.text_input("Pieces (Pcs):", "1", key="c_pcs")
-        with col5: amount = st.text_input("Total Amount (RS):", key="c_amt")
+        with col3: weight = st.text_input("Weight (Kg):", value=c_data_store[12] if c_data_store else "1.0", key="c_wt")
+        with col4: pcs = st.text_input("Pieces (Pcs):", value=c_data_store[13] if c_data_store else "1", key="c_pcs")
+        with col5: amount = st.text_input("Total Amount (RS):", value=c_data_store[14] if c_data_store else "", key="c_amt")
+        
         c_whatsapp_num = st.text_input("Customer WhatsApp Mobile No (મોબાઈલ નંબર):", key="c_wa_num")
         c_initial_pay_status = st.selectbox("Payment Status (પેમેન્ટ સ્ટેટસ):", ["Paid (ચૂકવાઈ ગયું)", "Unpaid (બાકી)"], key="c_init_status")
 
-        if st.button("💾 Save & Generate Cash Receipt", type="primary"):
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            save_clicked = st.button("💾 Save & Generate Cash Receipt", type="primary")
+        with col_b2:
+            # જો ડેટા લોડ થયો હોય તો ડાયરેક્ટ પ્રિન્ટ બટન પણ હાજર રહેશે!
+            direct_print_ready = False
+            if c_data_store:
+                direct_print_ready = True
+
+        if save_clicked:
             if not cons_no or not sender_name or not rec_name or not amount:
                 st.error("મહેરબાની કરીને Consignment No, Sender Name, Recipient Name અને Amount ભરો!")
             else:
-                img_bytes = uploaded_photo.getvalue() if uploaded_photo else None
+                img_bytes = uploaded_photo.getvalue() if uploaded_photo else (c_data_store[16] if (c_data_store and len(c_data_store) > 16) else None)
                 status_val = "Paid" if "Paid" in c_initial_pay_status else "Unpaid"
                 
                 data_tuple = (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), sender_name.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Cash', status_val)
@@ -871,9 +903,8 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                     st.success(f"Cash Entry Saved Successfully for Consignment: {cons_no} [{status_val}]")
                     sync_two_way()
                     
-                    # અહીં ડાયરેક્ટ img_bytes પાસ કરી દીધા છે જેથી નવી રિસીપ્ટમાં ફોટો તરત આવી જાય
                     pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Cash', img_bytes)
-                    st.download_button(label="📄 Step 1: Download Printable PDF Receipt with Photo", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
+                    st.download_button(label="📄 Step 1: Download Printable PDF Receipt with Photo", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf", type="primary")
                     
                     if c_whatsapp_num.strip():
                         wa_msg = (
@@ -892,6 +923,14 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                         st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Step 2: Send Confirmation on WhatsApp</a>', unsafe_allow_html=True)
                 except Exception as e:
                     st.error(f"એન્ટ્રી સેવ કરતી વખતે ભૂલ આવી: {e}")
+
+        # જો ઉપર ઓપન કરેલું હોય તો નીચે ડાયરેક્ટ પ્રિન્ટનું બટન પણ આપી દઈએ
+        if direct_print_ready and c_data_store:
+            st.markdown("---")
+            st.info(f"🖨️ લોડ થયેલ કન્સાઇનમેન્ટ **{c_data_store[0]}** ની પ્રિન્ટ સીધી અહીંથી કાઢી શકો છો:")
+            print_img_bytes = c_data_store[16] if len(c_data_store) > 16 else None
+            pdf_bytes_direct = generate_hd_receipt_pdf(c_data_store[0], c_data_store[1], c_data_store[2], c_data_store[3], c_data_store[4], c_data_store[5], c_data_store[6], c_data_store[7], c_data_store[8], c_data_store[9], c_data_store[10], c_data_store[11], c_data_store[12], c_data_store[13], c_data_store[14], 'Cash', print_img_bytes)
+            st.download_button(label=f"🖨️ Download PDF Receipt with Photo for [{c_data_store[0]}]", data=pdf_bytes_direct, file_name=f"Receipt_{c_data_store[0]}.pdf", mime="application/pdf", type="primary")
 
     with tab2:
         st.subheader("📜 Cash Booking Records & Date-Wise Total Summary")
@@ -984,28 +1023,35 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
         else:
             st.warning("આ તારીખની મર્યાદામાં કોઈ કેશ બુકિંગ એન્ટ્રી મળી નથી.")
 
-    with tab3:
-        st.subheader("🖨️ Re-Print / View Receipt by Consignment No")
-        search_cons = st.text_input("Enter Consignment No to Print:")
-        if st.button("🔍 Search & Print Receipt", type="primary"):
-            if search_cons.strip():
+# ----------------- ૩. CREDIT ACCOUNT BOOKING -----------------
+elif menu == "📋 Credit Account Booking (ક્રેડિટ બુકિંગ & ફાસ્ટ ઓપન)":
+    tab_cr1, tab_cr2 = st.tabs(["📋 Credit Booking & Fast Open (નવી એન્ટ્રી & ઓપન બટન)", "📜 Credit History & View (હિસ્ટ્રી & સુધારો)"])
+    with tab_cr1:
+        st.subheader("Credit Account Courier Booking with Fast Open")
+        
+        # 🚀 ક્રેડિટ બુકિંગ માટે પણ ફાસ્ટ ઓપન સર્ચ બટન
+        with st.container():
+            st.markdown("### 🔍 જૂનો કે નવો કન્સાઇનમેન્ટ નંબર નાખીને ક્રેડિટ ડેટા 'Open' કરો:")
+            col_cr_s1, col_cr_s2 = st.columns([3, 1])
+            with col_cr_s1:
+                quick_cr_search = st.text_input("Credit Consignment No Search:", placeholder="ગમે તે જૂનો Cons. No નાખો...", label_visibility="collapsed", key="quick_cr_search_box")
+            with col_cr_s2:
+                fast_cr_open_btn = st.button("📂 Open (ઓપન)", type="secondary", key="btn_open_cr")
+            
+            if fast_cr_open_btn and quick_cr_search.strip():
                 conn = get_local_connection()
                 cursor = conn.cursor()
-                cursor.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, parcel_img FROM receipts WHERE cons_no=?", (search_cons.strip(),))
-                rec_data = cursor.fetchone()
+                cursor.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, payment_status, parcel_img FROM receipts WHERE cons_no=?", (quick_cr_search.strip(),))
+                loaded_cr_rec = cursor.fetchone()
                 conn.close()
-                if rec_data:
-                    st.success("રસીદ અને ફોટો સફળતાપૂર્વક મળી ગયા છે!")
-                    pdf_bytes = generate_hd_receipt_pdf(rec_data[0], rec_data[1], rec_data[2], rec_data[3], rec_data[4], rec_data[5], rec_data[6], rec_data[7], rec_data[8], rec_data[9], rec_data[10], rec_data[11], rec_data[12], rec_data[13], rec_data[14], rec_data[15], rec_data[16])
-                    st.download_button(label="🖨️ Download Printable Receipt with Photo (PDF)", data=pdf_bytes, file_name=f"Receipt_{rec_data[0]}.pdf", mime="application/pdf")
+                if loaded_cr_rec:
+                    st.session_state['loaded_cr_data'] = loaded_cr_rec
+                    st.success(f"🎯 ક્રેડિટ કન્સાઇનમેન્ટ '{loaded_cr_rec[0]}' નો ડેટા સફળતાપૂર્વક લોડ થઈ ગયો છે!")
                 else:
-                    st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
+                    st.error("આ કન્સાઇનમેન્ટ નંબરનો કોઈ ડેટા મળ્યો નથી!")
 
-# ----------------- ૩. CREDIT ACCOUNT BOOKING -----------------
-elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)":
-    tab_cr1, tab_cr2, tab_cr3 = st.tabs(["📋 Credit Booking (નવી એન્ટ્રી)", "🖨️ Re-Print Credit Receipt", "📜 Credit History & View (હિસ્ટ્રી & સુધારો)"])
-    with tab_cr1:
-        st.subheader("Credit Account Courier Booking")
+        cr_data_store = st.session_state.get('loaded_cr_data', None)
+
         conn = get_local_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT party_name, party_address, party_city, mobile FROM parties ORDER BY party_name ASC")
@@ -1018,71 +1064,65 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
         if not party_names:
             st.warning("⚠️ પહેલા 'Add Account Party' પસંદ કરીને પાર્ટી ઉમેરો!")
         else:
-            selected_party = st.selectbox("Select Party Name (પાર્ટી સિલેક્ટ કરો):", party_names)
+            default_party_idx = 0
+            if cr_data_store and cr_data_store[6] in party_names:
+                default_party_idx = party_names.index(cr_data_store[6])
+
+            selected_party = st.selectbox("Select Party Name (પાર્ટી સિલેક્ટ કરો):", party_names, index=default_party_idx)
             default_s_addr = party_dict[selected_party]["address"] if selected_party in party_dict else ""
             default_s_city = party_dict[selected_party]["city"] if selected_party in party_dict else ""
 
             cr_uploaded_photo = st.file_uploader("📷 Auto-Scan Parcel Photo (બારકોડ & પિનકોડ ઓટો-ફિલ):", type=["jpg", "jpeg", "png"], key="cr_photo")
-            cr_auto_cons = ""
+            cr_auto_cons = cr_data_store[0] if cr_data_store else ""
             cr_auto_pin = ""
             if cr_uploaded_photo:
                 cr_auto_cons, cr_auto_pin = scan_label_image(cr_uploaded_photo.getvalue())
             
             col1, col2 = st.columns(2)
             with col1:
-                cons_no = st.text_input("Consignment No:", value=cr_auto_cons, key="cr_cons")
-                date_entry = st.text_input("Date:", value=today.strftime("%d/%m/%Y"), key="cr_date")
-                courier_co = st.text_input("Courier Company:", "DTDC", key="cr_co")
-                mode = st.text_input("Service Mode:", "Surface", key="cr_mode")
-                origin = st.text_input("Origin:", "BHAVNAGAR", key="cr_orig")
-                dest = st.text_input("Destination:", key="cr_dest")
+                cons_no = st.text_input("Consignment No:", value=cr_auto_cons if cr_auto_cons else (cr_data_store[0] if cr_data_store else ""), key="cr_cons")
+                date_entry = st.text_input("Date:", value=cr_data_store[1] if cr_data_store else today.strftime("%d/%m/%Y"), key="cr_date")
+                courier_co = st.text_input("Courier Company:", value=cr_data_store[2] if cr_data_store else "DTDC", key="cr_co")
+                mode = st.text_input("Service Mode:", value=cr_data_store[3] if cr_data_store else "Surface", key="cr_mode")
+                origin = st.text_input("Origin:", value=cr_data_store[4] if cr_data_store else "BHAVNAGAR", key="cr_orig")
+                dest = st.text_input("Destination:", value=cr_data_store[5] if cr_data_store else "", key="cr_dest")
             with col2:
-                sender_address = st.text_input("Sender Address (મોકલનારનું સરનામું):", value=default_s_addr, key=f"cr_s_addr_{selected_party}")
-                sender_city = st.text_input("Sender City/Pin (શહેર/પીન):", value=default_s_city, key=f"cr_s_city_{selected_party}")
-                rec_name = st.text_input("Recipient Name:", key="cr_r_name")
-                rec_address = st.text_input("Recipient Address:", key="cr_r_addr")
-                rec_city = st.text_input("Recipient City/Pin:", value=auto_pin, key="cr_r_city")
+                sender_address = st.text_input("Sender Address (મોકલનારનું સરનામું):", value=cr_data_store[7] if cr_data_store else default_s_addr, key=f"cr_s_addr_{selected_party}")
+                sender_city = st.text_input("Sender City/Pin (શહેર/પીન):", value=cr_data_store[8] if cr_data_store else default_s_city, key=f"cr_s_city_{selected_party}")
+                rec_name = st.text_input("Recipient Name:", value=cr_data_store[9] if cr_data_store else "", key="cr_r_name")
+                rec_address = st.text_input("Recipient Address:", value=cr_data_store[10] if cr_data_store else "", key="cr_r_addr")
+                rec_city = st.text_input("Recipient City/Pin:", value=cr_auto_pin if cr_auto_pin else (cr_data_store[11] if cr_data_store else ""), key="cr_r_city")
             
             col3, col4, col5 = st.columns(3)
-            with col3: weight = st.text_input("Weight (Kg):", "1.0", key="cr_wt")
-            with col4: pcs = st.text_input("Pieces (Pcs):", "1", key="cr_pcs")
-            with col5: amount = st.text_input("Amount (RS):", key="cr_amt")
+            with col3: weight = st.text_input("Weight (Kg):", value=cr_data_store[12] if cr_data_store else "1.0", key="cr_wt")
+            with col4: pcs = st.text_input("Pieces (Pcs):", value=cr_data_store[13] if cr_data_store else "1", key="cr_pcs")
+            with col5: amount = st.text_input("Amount (RS):", value=cr_data_store[14] if cr_data_store else "", key="cr_amt")
             
-            if st.button("💾 Save & Print Credit Booking", type="primary"):
+            save_cr_clicked = st.button("💾 Save & Print Credit Booking", type="primary")
+            if save_cr_clicked:
                 if not cons_no or not rec_name or not amount:
                     st.error("મહેરબાની કરીને બધી માહિતી ભરો!")
                 else:
-                    cr_img_bytes = cr_uploaded_photo.getvalue() if cr_uploaded_photo else None
+                    cr_img_bytes = cr_uploaded_photo.getvalue() if cr_uploaded_photo else (cr_data_store[16] if (cr_data_store and len(cr_data_store) > 16) else None)
                     data_tuple = (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), selected_party.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Credit Account', 'Unpaid')
                     try:
                         save_receipt_to_cloud_and_local(data_tuple, cr_img_bytes)
                         st.success(f"Credit Entry Saved for '{selected_party}'")
                         sync_two_way()
 
-                        # અહીં પણ cr_img_bytes સીધા પાસ કરી દીધા છે
                         pdf_bytes = generate_hd_receipt_pdf(cons_no, date_entry, courier_co, mode, origin, dest, selected_party, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, 'Credit Account', cr_img_bytes)
-                        st.download_button(label="🖨️ Download Credit Receipt PDF with Photo", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf")
+                        st.download_button(label="🖨️ Download Credit Receipt PDF with Photo", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf", type="primary")
                     except Exception as e:
                         st.error(f"એન્ટ્રી સેવ કરતી વખતે ભૂલ આવી: {e}")
 
-    with tab_cr2:
-        st.subheader("🖨️ Re-Print Credit Receipt by Consignment No")
-        search_cr_cons = st.text_input("Enter Consignment No to Print (કન્સાઇનમેન્ટ નંબર નાખો):", key="search_cr")
-        if st.button("🔍 Search & Print Credit Receipt", type="primary"):
-            if search_cr_cons.strip():
-                conn = get_local_connection()
-                cursor = conn.cursor()
-                cursor.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, parcel_img FROM receipts WHERE cons_no=?", (search_cr_cons.strip(),))
-                rec_data = cursor.fetchone()
-                conn.close()
-                if rec_data:
-                    st.success("રસીદ અને ફોટો સફળતાપૂર્વક મળી ગયા છે!")
-                    pdf_bytes = generate_hd_receipt_pdf(rec_data[0], rec_data[1], rec_data[2], rec_data[3], rec_data[4], rec_data[5], rec_data[6], rec_data[7], rec_data[8], rec_data[9], rec_data[10], rec_data[11], rec_data[12], rec_data[13], rec_data[14], rec_data[15], rec_data[16])
-                    st.download_button(label="🖨️ Download HD Printable Receipt with Photo (PDF)", data=pdf_bytes, file_name=f"Receipt_{search_cr_cons}.pdf", mime="application/pdf")
-                else:
-                    st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
+            if cr_data_store:
+                st.markdown("---")
+                st.info(f"🖨️ લોડ થયેલ ક્રેડિટ કન્સાઇનમેન્ટ **{cr_data_store[0]}** ની પ્રિન્ટ સીધી અહીંથી કાઢી શકો છો:")
+                print_cr_img = cr_data_store[16] if len(cr_data_store) > 16 else None
+                pdf_cr_direct = generate_hd_receipt_pdf(cr_data_store[0], cr_data_store[1], cr_data_store[2], cr_data_store[3], cr_data_store[4], cr_data_store[5], cr_data_store[6], cr_data_store[7], cr_data_store[8], cr_data_store[9], cr_data_store[10], cr_data_store[11], cr_data_store[12], cr_data_store[13], cr_data_store[14], 'Credit Account', print_cr_img)
+                st.download_button(label=f"🖨️ Download Credit PDF with Photo for [{cr_data_store[0]}]", data=pdf_cr_direct, file_name=f"Receipt_{cr_data_store[0]}.pdf", mime="application/pdf", type="primary")
 
-    with tab_cr3:
+    with tab_cr2:
         st.subheader("📜 View Credit Account Bookings & Edit/Delete")
         conn = get_local_connection()
         cursor = conn.cursor()
