@@ -898,7 +898,8 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
         
         conn = get_local_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, cons_no, date, sender_name, rec_name, amount, payment_status FROM receipts WHERE booking_type='Cash' ORDER BY id DESC")
+        # અહીં parcel_img પણ સિલેક્ટ કરી લીધું છે જેથી હિસ્ટ્રી કે એક્સપૅન્ડરમાંથી પ્રિન્ટ કાઢતી વખતે ફોટો મિસ ન થાય
+        cursor.execute("SELECT id, cons_no, date, sender_name, rec_name, amount, payment_status, courier_co, mode, origin, dest, sender_address, sender_city, rec_address, rec_city, weight, pcs, parcel_img FROM receipts WHERE booking_type='Cash' ORDER BY id DESC")
         cash_rows = cursor.fetchall()
         conn.close()
         
@@ -930,7 +931,7 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
         
         if filtered_cash_history:
             for idx, r in enumerate(filtered_cash_history, 1):
-                r_id, cons, r_date, s_name, r_name, amt, p_status = r
+                r_id, cons, r_date, s_name, r_name, amt, p_status, c_co, c_mode, orig, destination, s_addr, s_city, r_addr, r_city, wt, pcs, p_img = r
                 cur_status_str = f"🟢 PAID" if p_status == "Paid" else f"🔴 UNPAID"
                 
                 with st.expander(f"[{idx}] Cons: {cons} | Date: {r_date} | From: {s_name} ➔ To: {r_name} | RS {amt}/- | Status: {cur_status_str}"):
@@ -938,6 +939,9 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                     with col_h1:
                         st.write(f"**Date:** {r_date} | **Amount:** RS {amt}/-")
                         st.write(f"**Current Payment:** {cur_status_str}")
+                        # હિસ્ટ્રીમાંથી ડાઉનલોડ બટન સાથે ફોટો પરફેક્ટ જોડ્યો છે
+                        pdf_hist = generate_hd_receipt_pdf(cons, r_date, c_co, c_mode, orig, destination, s_name, s_addr, s_city, r_name, r_addr, r_city, wt, pcs, amt, 'Cash', p_img)
+                        st.download_button("🖨️ Download Receipt PDF with Photo", data=pdf_hist, file_name=f"Receipt_{cons}.pdf", mime="application/pdf", key=f"dl_cash_hist_{r_id}")
                     with col_h2:
                         if st.button("🟢 Mark Paid", key=f"mark_paid_{r_id}"):
                             conn = get_local_connection()
@@ -1097,7 +1101,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                         st.write(f"**Weight:** {wt} Kg | **Pieces:** {pcs}")
                     with col_e2:
                         pdf_b = generate_hd_receipt_pdf(cons, r_date, c_co, c_mode, orig, destination, party, s_addr, s_city, recip, r_addr, r_city, wt, pcs, amt, 'Credit Account', p_img)
-                        st.download_button("🖨️ Download Receipt PDF", data=pdf_b, file_name=f"Receipt_{cons}.pdf", mime="application/pdf", key=f"dl_pdf_{rec_id}")
+                        st.download_button("🖨️ Download Receipt PDF with Photo", data=pdf_b, file_name=f"Receipt_{cons}.pdf", mime="application/pdf", key=f"dl_pdf_{rec_id}")
                     if st.button(f"🗑️ Delete Entry ({cons})", key=f"del_cr_{rec_id}"):
                         conn = get_local_connection()
                         cursor = conn.cursor()
