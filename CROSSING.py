@@ -207,7 +207,7 @@ if 'synced' not in st.session_state:
     sync_two_way()
     st.session_state['synced'] = True
 
-# Helper function to save to both Local and Supabase Cloud
+# Helper function to save to both Local and Supabase Cloud (દૂર કરેલ એરર સાથે સુધારેલું ફંક્શન)
 def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
     # Local Save
     conn = get_local_connection()
@@ -1502,4 +1502,3 @@ elif menu == "📊 Summary & Reports (કેશ & ક્રેડિટ સમ�
             )
         else:
             st.warning("આ ફિલ્ટર મુજબ કોઈ ક્રેડિટ બુકિંગ એન્ટ્રી મળી નથી.")
-
