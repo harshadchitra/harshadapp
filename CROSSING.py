@@ -106,6 +106,19 @@ def init_db():
     for c_name, c_url in default_couriers:
         cursor.execute("INSERT OR IGNORE INTO couriers (courier_name, tracking_url) VALUES (?, ?)", (c_name, c_url))
 
+    # અલગથી પેકિંગ રિસીપ્ટ માટેનું ટેબલ
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS packing_receipts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            receipt_no TEXT UNIQUE,
+            date TEXT,
+            customer_name TEXT,
+            mobile TEXT,
+            packing_items TEXT,
+            total_charge TEXT
+        )
+    """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS party_payments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,111 +143,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-    sconn = get_supabase_connection()
-    if sconn:
-        try:
-            scur = sconn.cursor()
-            scur.execute("""
-                CREATE TABLE IF NOT EXISTS receipts (
-                    id SERIAL PRIMARY KEY,
-                    cons_no TEXT UNIQUE,
-                    date TEXT,
-                    courier_co TEXT,
-                    mode TEXT,
-                    origin TEXT,
-                    dest TEXT,
-                    sender_name TEXT,
-                    sender_address TEXT,
-                    sender_city TEXT,
-                    rec_name TEXT,
-                    rec_address TEXT,
-                    rec_city TEXT,
-                    weight TEXT,
-                    pcs TEXT,
-                    amount TEXT,
-                    booking_type TEXT,
-                    bill_no TEXT,
-                    payment_status TEXT DEFAULT 'Unpaid',
-                    packing_info TEXT,
-                    packing_charge TEXT
-                )
-            """)
-            scur.execute("""
-                CREATE TABLE IF NOT EXISTS parties (
-                    id SERIAL PRIMARY KEY,
-                    party_name TEXT UNIQUE,
-                    party_address TEXT,
-                    party_city TEXT,
-                    mobile TEXT
-                )
-            """)
-            scur.execute("""
-                CREATE TABLE IF NOT EXISTS couriers (
-                    id SERIAL PRIMARY KEY,
-                    courier_name TEXT UNIQUE,
-                    tracking_url TEXT
-                )
-            """)
-            scur.execute("""
-                CREATE TABLE IF NOT EXISTS party_payments (
-                    id SERIAL PRIMARY KEY,
-                    party_name TEXT,
-                    bill_no TEXT,
-                    date TEXT,
-                    amount TEXT,
-                    pay_mode TEXT,
-                    note TEXT
-                )
-            """)
-            scur.execute("""
-                CREATE TABLE IF NOT EXISTS bills (
-                    id SERIAL PRIMARY KEY,
-                    bill_no TEXT UNIQUE,
-                    party_name TEXT,
-                    bill_date TEXT,
-                    period TEXT,
-                    total_amount TEXT
-                )
-            """)
-            sconn.commit()
-            scur.close()
-            sconn.close()
-        except Exception:
-            pass
-
-@st.cache_data(ttl=10)
-def sync_two_way():
-    sconn = get_supabase_connection()
-    if not sconn:
-        return
-    try:
-        lconn = get_local_connection()
-        lcur = lconn.cursor()
-        scur = sconn.cursor()
-
-        scur.execute("SELECT party_name, party_address, party_city, mobile FROM parties")
-        for row in scur.fetchall():
-            lcur.execute("INSERT OR IGNORE INTO parties (party_name, party_address, party_city, mobile) VALUES (?, ?, ?, ?)", row)
-            
-        scur.execute("SELECT courier_name, tracking_url FROM couriers")
-        for row in scur.fetchall():
-            lcur.execute("INSERT OR IGNORE INTO couriers (courier_name, tracking_url) VALUES (?, ?)", row)
-        
-        scur.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, bill_no, payment_status, packing_info, packing_charge FROM receipts")
-        for row in scur.fetchall():
-            lcur.execute("INSERT OR IGNORE INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, bill_no, payment_status, packing_info, packing_charge) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", row)
-
-        lconn.commit()
-        scur.close()
-        sconn.close()
-        lconn.close()
-    except Exception:
-        pass
-
 init_db()
-if 'synced' not in st.session_state:
-    sync_two_way()
-    st.session_state['synced'] = True
 
 # ----------------- સેવ ફંક્શન -----------------
 def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
@@ -246,45 +155,6 @@ def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
     """, data_tuple + (img_bytes,))
     conn.commit()
     conn.close()
-
-    sconn = get_supabase_connection()
-    if sconn:
-        try:
-            scur = sconn.cursor()
-            cloud_tuple = (
-                data_tuple[0], data_tuple[1], data_tuple[2], data_tuple[3], data_tuple[4], 
-                data_tuple[5], data_tuple[6], data_tuple[7], data_tuple[8], data_tuple[9], 
-                data_tuple[10], data_tuple[11], data_tuple[12], data_tuple[13], data_tuple[14], 
-                data_tuple[15], data_tuple[16], data_tuple[17], data_tuple[18], data_tuple[19]
-            )
-            scur.execute("""
-                INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, bill_no, payment_status, packing_info, packing_charge)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (cons_no) DO UPDATE SET 
-                    date = EXCLUDED.date,
-                    courier_co = EXCLUDED.courier_co,
-                    mode = EXCLUDED.mode,
-                    origin = EXCLUDED.origin,
-                    dest = EXCLUDED.dest,
-                    sender_name = EXCLUDED.sender_name,
-                    sender_address = EXCLUDED.sender_address,
-                    sender_city = EXCLUDED.sender_city,
-                    rec_name = EXCLUDED.rec_name,
-                    rec_address = EXCLUDED.rec_address,
-                    rec_city = EXCLUDED.rec_city,
-                    weight = EXCLUDED.weight,
-                    pcs = EXCLUDED.pcs,
-                    amount = EXCLUDED.amount,
-                    booking_type = EXCLUDED.booking_type,
-                    payment_status = EXCLUDED.payment_status,
-                    packing_info = EXCLUDED.packing_info,
-                    packing_charge = EXCLUDED.packing_charge
-            """, cloud_tuple)
-            sconn.commit()
-            scur.close()
-            sconn.close()
-        except Exception as e:
-            print("Cloud Save Error:", e)
 
 # ----------------- AI PHOTO AUTO-FILL SCANNER -----------------
 def scan_label_image(image_bytes):
@@ -464,39 +334,46 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     buffer.seek(0)
     return buffer.getvalue()
 
-def generate_summary_pdf_report(title_text, period_str, headers, rows, total_amt_str):
+# અલગથી પેકિંગ રિસીપ્ટ પીડીએફ જનરેટર
+def generate_packing_pdf_receipt(receipt_no, date, customer_name, mobile, items_desc, total_charge):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
     story = []
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#002147'), alignment=1, spaceAfter=2)
-    sub_style = ParagraphStyle('SubStyle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#555555'), alignment=1, spaceAfter=15)
-    bold_style = ParagraphStyle('BoldStyle', parent=styles['Normal'], fontSize=9, textColor=colors.black, fontName='Helvetica-Bold')
-    normal_style = ParagraphStyle('NormalStyle', parent=styles['Normal'], fontSize=9, textColor=colors.black)
+    title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=22, textColor=colors.HexColor('#002147'), alignment=1, spaceAfter=2)
+    sub_title_style = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#555555'), alignment=1, spaceAfter=15)
+    rec_head_style = ParagraphStyle('RecHead', parent=styles['Heading2'], fontSize=14, textColor=colors.HexColor('#008000'), alignment=1, spaceAfter=20)
+    normal_style = ParagraphStyle('NormalStyle', parent=styles['Normal'], fontSize=11, textColor=colors.black, leading=16)
     
-    story.append(Paragraph("📦 COURIER SOLUTION", title_style))
-    story.append(Paragraph(f"<b>{title_text}</b><br/>Period: {period_str}", sub_style))
+    story.append(Paragraph("COURIER SOLUTION", title_style))
+    story.append(Paragraph("Express Cargo & Logistics Services", sub_title_style))
+    story.append(Paragraph("PACKING MATERIAL & SERVICE RECEIPT", rec_head_style))
     
-    table_headers = [Paragraph(f'<b>{h}</b>', bold_style) for h in headers]
-    data = [table_headers]
-    for r in rows:
-        data.append([Paragraph(str(cell), normal_style) for cell in r])
-        
-    data.append([
-        Paragraph("<b>TOTAL</b>", bold_style), "", "", "", "", "",
-        Paragraph(f"<b>{total_amt_str}</b>", ParagraphStyle('GTotal', parent=bold_style, textColor=colors.HexColor('#008000')))
-    ])
-    
-    t = Table(data, colWidths=[30, 80, 75, 85, 95, 115, 65])
+    data = [
+        [Paragraph("<b>Receipt No:</b>", normal_style), Paragraph(f"{receipt_no}", normal_style)],
+        [Paragraph("<b>Date:</b>", normal_style), Paragraph(f"{date}", normal_style)],
+        [Paragraph("<b>Customer Name:</b>", normal_style), Paragraph(f"<font size=12 color='#002147'><b>{customer_name}</b></font>", normal_style)],
+        [Paragraph("<b>Mobile No:</b>", normal_style), Paragraph(f"{mobile if mobile else 'N/A'}", normal_style)],
+        [Paragraph("<b>Packing Items / Details:</b>", normal_style), Paragraph(f"<b>{items_desc}</b>", normal_style)],
+        [Paragraph("<b>Total Packing Amount:</b>", normal_style), Paragraph(f"<font size=13 color='green'><b>₹ {float(total_charge):,.2f}/-</b></font>", normal_style)]
+    ]
+    t = Table(data, colWidths=[180, 340])
     t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#002147')),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')),
-        ('SPAN', (0, -1), (5, -1)),
-        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#e8f5e9')),
-        ('PADDING', (0,0), (-1,-1), 5),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8f9fa')),
+        ('BOX', (0,0), (-1,-1), 1.5, colors.HexColor('#008000')),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e0e0e0')),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('PADDING', (0,0), (-1,-1), 10),
     ]))
     story.append(t)
+    story.append(Spacer(1, 40))
+    
+    footer_data = [
+        [Paragraph("<b>Customer Signature</b>", normal_style), Paragraph("<b>Authorized Signatory</b><br/>(Courier Solution)", ParagraphStyle('RAlign', parent=normal_style, alignment=2))]
+    ]
+    t_foot = Table(footer_data, colWidths=[260, 260])
+    t_foot.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'BOTTOM')]))
+    story.append(t_foot)
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
@@ -537,7 +414,7 @@ def generate_pdf_invoice(bill_no, party_name, period_str, bill_date, items, tota
             Paragraph(str(r[3]), bold_style),
             Paragraph(str(r[4]), normal_style),
             Paragraph(str(r[5]), normal_style),
-            Paragraph(str(r[18] if len(r)>18 and r[18] else 'Free'), normal_style),
+            Paragraph(str(r[20] if len(r)>20 and r[20] else 'Free'), normal_style),
             Paragraph(f"RS {float(r[7]):,.2f}", normal_style)
         ])
     t_items = Table(data, colWidths=[25, 85, 60, 65, 75, 95, 85, 55])
@@ -599,6 +476,7 @@ menu = st.sidebar.radio("મેનુ પસંદ કરો (Menu)", [
     "➕ Add Account Party (પાર્ટી ઉમેરો)",
     "🚚 Add Courier Master (કુરિયર અને ટ્રેકિંગ URL ઉમેરો)",
     "💵 Cash Courier Booking (કેશ બુકિંગ & પેકિંગ)",
+    "📦 Separate Packing Service (અલગ પેકિંગ સર્વિસ રિસીપ્ટ)",
     "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)",
     "📊 Party Monthly Billing (ડિજિટલ પીડીએફ બિલ)",
     "💳 Party Payment Receive (પેમેન્ટ જમા & રસીદ)",
@@ -682,7 +560,7 @@ elif menu == "🚚 Add Courier Master (કુરિયર અને ટ્રે
             st.success("કુરિયર સેવ થઈ ગયું છે!")
             st.rerun()
 
-# ----------------- ૩. CASH BOOKING WITH PACKING CHARGE -----------------
+# ----------------- ૩. CASH BOOKING WITH PACKING -----------------
 elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & પેકિંગ)":
     tab1, tab2, tab3 = st.tabs(["💵 Cash Booking (નવી એન્ટ્રી)", "📜 Cash History", "🖨️ Re-Print Receipt"])
     
@@ -815,7 +693,110 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & પે�
                 else:
                     st.error("કોઈ એન્ટ્રી મળી નથી!")
 
-# ----------------- ૪. CREDIT ACCOUNT BOOKING -----------------
+# ----------------- ૪. SEPARATE PACKING SERVICE MENU (NEW) -----------------
+elif menu == "📦 Separate Packing Service (અલગ પેકિંગ સર્વિસ રિસીપ્ટ)":
+    st.subheader("📦 Separate Packing Service & Material Billing")
+    st.info("💡 અહીંથી તમે કોઈપણ ગ્રાહકને કુરિયર વગર ખાલી પેકિંગ મટીરીયલ (બોક્સ, સેલોટેપ, ઓનલાઈન બેગ વગેરે) કે સર્વિસનું અલગથી બિલ કે રિસીપ્ટ બનાવી આપી શકો છો.")
+
+    with st.form("sep_packing_form"):
+        cust_name = st.text_input("Customer Name (ગ્રાહકનું નામ):")
+        cust_mob = st.text_input("Mobile No (મોબાઈલ નંબર):")
+        pack_date = st.text_input("Date:", value=today.strftime("%d/%m/%Y"))
+        
+        st.write("---")
+        st.write("### પેકિંગ મટીરીયલ અને આઇટમ્સ સિલેક્ટ કરો:")
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+            item_box = st.checkbox("Box Packing (બોક્સ પૅકિંગ)")
+            item_tape = st.checkbox("Cellotape (સેલોટેપ)")
+        with col_p2:
+            item_bag = st.checkbox("Online Bag (ઓનલાઈન બેગ)")
+            item_other = st.checkbox("Other Material (અન્ય મટીરીયલ)")
+
+        custom_items_desc = st.text_input("Custom Details / Notes (વિગત લખો - દા.ત. 2 Large Box, 1 Tape):")
+        total_pack_charge = st.text_input("Total Packing Charge (કુલ પેકિંગ ચાર્જ RS):", "50")
+
+        submit_sep_pack = st.form_submit_button("💾 Save & Generate Packing Receipt", type="primary")
+
+        if submit_sep_pack:
+            if not cust_name.strip() or not total_pack_charge.strip():
+                st.error("મહેરબાની કરીને ગ્રાહકનું નામ અને પેકિંગ ચાર્જ ભરો!")
+            else:
+                selected_items = []
+                if item_box: selected_items.append("Box Packing")
+                if item_tape: selected_items.append("Cellotape")
+                if item_bag: selected_items.append("Online Bag")
+                if item_other: selected_items.append("Other")
+                if custom_items_desc: selected_items.append(custom_items_desc)
+                
+                items_str = ", ".join(selected_items) if selected_items else "General Packing"
+
+                conn = get_local_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM packing_receipts")
+                p_count = cursor.fetchone()[0] + 1
+                rec_no = f"PACK-REC-{p_count:04d}"
+
+                cursor.execute("""
+                    INSERT INTO packing_receipts (receipt_no, date, customer_name, mobile, packing_items, total_charge)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (rec_no, pack_date.strip(), cust_name.strip(), cust_mob.strip(), items_str, total_pack_charge.strip()))
+                conn.commit()
+                conn.close()
+
+                st.success(f"પેકિંગ રિસીપ્ટ સફળતાપૂર્વક બની ગઈ છે! [Receipt No: {rec_no}]")
+                
+                pdf_pack_bytes = generate_packing_pdf_receipt(rec_no, pack_date, cust_name, cust_mob, items_str, total_pack_charge)
+                st.download_button(
+                    label="📄 Download Packing Receipt PDF",
+                    data=pdf_pack_bytes,
+                    file_name=f"Packing_Receipt_{rec_no}_{cust_name}.pdf",
+                    mime="application/pdf",
+                    type="primary"
+                )
+
+                if cust_mob.strip():
+                    wa_pack_msg = (
+                        "📦 COURIER SOLUTION - PACKING RECEIPT\n\n"
+                        f"Customer: {cust_name}\n"
+                        f"Receipt No: {rec_no}\n"
+                        f"Items: {items_str}\n"
+                        f"Total Amount: RS {total_pack_charge}/-\n\n"
+                        "Thank you for visiting Courier Solution!"
+                    )
+                    wa_p_url = create_whatsapp_link(cust_mob.strip(), wa_pack_msg)
+                    st.markdown(f'<a href="{wa_p_url}" target="_blank" style="background-color:#25D366;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;display:inline-block;margin-top:10px;">📲 Send Packing Receipt on WhatsApp</a>', unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.subheader("📜 Previous Packing Receipts History")
+    conn = get_local_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, receipt_no, date, customer_name, mobile, packing_items, total_charge FROM packing_receipts ORDER BY id DESC")
+    all_packs = cursor.fetchall()
+    conn.close()
+
+    if all_packs:
+        for idx, pr in enumerate(all_packs, 1):
+            p_id, p_rec, p_date, p_cust, p_mob, p_items, p_amt = pr
+            col_pr1, col_pr2, col_pr3 = st.columns([3, 1.2, 1])
+            with col_pr1:
+                st.write(f"[{idx}] **{p_rec}** | Date: {p_date} | Customer: **{p_cust}** | Items: {p_items} | **RS {p_amt}/-**")
+            with col_pr2:
+                hist_p_pdf = generate_packing_pdf_receipt(p_rec, p_date, p_cust, p_mob, p_items, p_amt)
+                st.download_button("🖨️ PDF", data=hist_p_pdf, file_name=f"Packing_Receipt_{p_rec}.pdf", mime="application/pdf", key=f"dl_pack_{p_id}")
+            with col_pr3:
+                if st.button("🗑️ Delete", key=f"del_pack_{p_id}"):
+                    conn = get_local_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM packing_receipts WHERE id=?", (p_id,))
+                    conn.commit()
+                    conn.close()
+                    st.success("પેકિંગ રિસીપ્ટ ડિલીટ થઈ ગઈ છે!")
+                    st.rerun()
+    else:
+        st.info("કોઈ સેપરેટ પેકિંગ રિસીપ્ટ એન્ટ્રી નથી.")
+
+# ----------------- ૫. CREDIT ACCOUNT BOOKING -----------------
 elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)":
     st.subheader("Credit Account Booking with Packing Charges")
     conn = get_local_connection()
@@ -898,7 +879,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 except Exception as e:
                     st.error(f"ભૂલ આવી: {e}")
 
-# ----------------- ૫. MONTHLY BILLING -----------------
+# ----------------- ૬. MONTHLY BILLING -----------------
 elif menu == "📊 Party Monthly Billing (ડિજિટલ પીડીએફ બિલ)":
     st.subheader("📊 Party Digital PDF Invoice Generator")
     conn = get_local_connection()
@@ -921,7 +902,6 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ પીડીએફ 
                 b_count = cursor.fetchone()[0] + 1
                 generated_bill_no = f"BILL-2026-{b_count:03d}"
                 tot_bill = sum(float(r[7]) for r in b_rows if r[7])
-                cursor.execute("SELECT party_address, party_city, mobile FROM parties WHERE party_name=?", (sel_party,))
                 cursor.execute("INSERT INTO bills (bill_no, party_name, bill_date, period, total_amount) VALUES (?, ?, ?, ?, ?)",
                               (generated_bill_no, sel_party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)))
                 for item in b_rows:
@@ -930,13 +910,13 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ પીડીએફ 
                 conn.close()
 
                 pdf_bytes = generate_pdf_invoice(generated_bill_no, sel_party, f"{start_str} to {end_str}", today.strftime("%d/%m/%Y"), b_rows, tot_bill)
-                st.success(f"બિલ સફળતાપૂર્વક બન ગયું છે!")
+                st.success(f"બિલ સફળતાપૂર્વક બની ગયું છે!")
                 st.download_button(label="📄 Download Invoice PDF", data=pdf_bytes, file_name=f"Invoice_{generated_bill_no}.pdf", mime="application/pdf", type="primary")
             else:
                 conn.close()
                 st.info("કોઈ અનબિલ એન્ટ્રી નથી.")
 
-# ----------------- ૬. PAYMENT RECEIVE -----------------
+# ----------------- ૭. PAYMENT RECEIVE -----------------
 elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & રસીદ)":
     st.subheader("💳 Party Payment Receive")
     conn = get_local_connection()
@@ -963,7 +943,7 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
             pdf_b = generate_payment_pdf_receipt(rec_id, pay_party, "DIRECT", today.strftime("%d/%m/%Y"), pay_amt, pay_mode, "")
             st.download_button("Download Receipt", data=pdf_b, file_name=f"Pay_{rec_id}.pdf", mime="application/pdf", type="primary")
 
-# ----------------- ٧. SUMMARY -----------------
+# ----------------- ૮. SUMMARY -----------------
 elif menu == "📊 Summary & Reports (કેશ & ક્રેડિટ સમરી)":
     st.subheader("📊 Summary & Reports")
     conn = get_local_connection()
@@ -972,6 +952,9 @@ elif menu == "📊 Summary & Reports (કેશ & ક્રેડિટ સમ�
     c_sum = cursor.fetchone()[0] or 0.0
     cursor.execute("SELECT SUM(amount) FROM receipts WHERE booking_type='Credit Account'")
     cr_sum = cursor.fetchone()[0] or 0.0
+    cursor.execute("SELECT SUM(total_charge) FROM packing_receipts")
+    p_sum = cursor.fetchone()[0] or 0.0
     conn.close()
-    st.metric("📦 Total Cash Bookings (Packing Included)", f"RS {c_sum:,.2f}/-")
-    st.metric("📋 Total Credit Bookings (Packing Included)", f"RS {cr_sum:,.2f}/-")
+    st.metric("📦 Total Cash Bookings", f"RS {c_sum:,.2f}/-")
+    st.metric("📋 Total Credit Bookings", f"RS {cr_sum:,.2f}/-")
+    st.metric("📦 Separate Packing Receipts Total", f"RS {p_sum:,.2f}/-")
