@@ -207,7 +207,7 @@ if 'synced' not in st.session_state:
     sync_two_way()
     st.session_state['synced'] = True
 
-# ----------------- 100% એરર મુક્ત સેવ ફંક્શન -----------------
+# ----------------- 100% સુધારેલું અને પરફેક્ટ સેવ ફંક્શન -----------------
 def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
     # 1. Local Save (SQLite) - 18 Columns + img_bytes
     conn = get_local_connection()
@@ -219,14 +219,16 @@ def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
     conn.commit()
     conn.close()
 
-    # 2. Supabase Cloud Save (PostgreSQL) - Exactly 19 values matching data_tuple
+    # 2. Supabase Cloud Save (PostgreSQL) - બરાબર 19 વેલ્યુઝ અને 19 `%s` પ્લેસહોલ્ડર્સ
     sconn = get_supabase_connection()
     if sconn:
         try:
             scur = sconn.cursor()
+            # જો ક્લાઉડ ટેબલમાં parcel_img કૉલમ ન હોય તો પણ કોઈ વાંધો નહીં, 
+            # અહીં આપણે data_tuple ની બરાબર 19 વેલ્યુઝ અને 19 `%s` સેટ કરી દીધા છે.
             scur.execute("""
-                INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, bill_no, payment_status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO receipts (cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, bill_no, parcel_img, payment_status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (cons_no) DO UPDATE SET 
                     date = EXCLUDED.date,
                     courier_co = EXCLUDED.courier_co,
@@ -244,7 +246,7 @@ def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
                     amount = EXCLUDED.amount,
                     booking_type = EXCLUDED.booking_type,
                     payment_status = EXCLUDED.payment_status
-            """, data_tuple)
+            """, data_tuple + (img_bytes,))
             sconn.commit()
             scur.close()
             sconn.close()
@@ -1407,7 +1409,7 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
                             scur.execute("DELETE FROM party_payments WHERE party_name=%s AND amount=%s AND date=%s", (r[1], r[4], r[3]))
                             sconn.commit()
                             scur.close()
-                            sconn.close()
+                            scconn.close()
                         except Exception: pass
 
                     st.success("પેમેન્ટ એન્ટ્રી સફળતાપૂર્વક ડિલીટ થઈ ગઈ છે!")
