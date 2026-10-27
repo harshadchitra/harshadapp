@@ -203,7 +203,6 @@ if 'synced' not in st.session_state:
 
 # ----------------- 100% એરર મુક્ત ફાઈનલ સેવ ફંક્શન -----------------
 def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
-    # 1. Local Save (SQLite) - 18 columns + img_bytes
     conn = get_local_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -213,7 +212,6 @@ def save_receipt_to_cloud_and_local(data_tuple, img_bytes):
     conn.commit()
     conn.close()
 
-    # 2. Supabase Cloud Save (PostgreSQL) - Exactly 18 values matching data_tuple
     sconn = get_supabase_connection()
     if sconn:
         try:
@@ -866,7 +864,6 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
                 img_bytes = uploaded_photo.getvalue() if uploaded_photo else None
                 status_val = "Paid" if "Paid" in c_initial_pay_status else "Unpaid"
                 
-                # બરાબર 18 વેલ્યુઝ (None કાઢી નાખ્યું છે જેથી એરર ન આવે)
                 data_tuple = (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), sender_name.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Cash', status_val)
                 
                 try:
@@ -991,13 +988,14 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & હિ�
             if search_cons.strip():
                 conn = get_local_connection()
                 cursor = conn.cursor()
+                # અહીં પાર્સલ ફોટો પણ પરફેક્ટલી ફેચ થાય તે સુધારો કરી દીધો છે
                 cursor.execute("SELECT cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, parcel_img FROM receipts WHERE cons_no=?", (search_cons.strip(),))
                 rec_data = cursor.fetchone()
                 conn.close()
                 if rec_data:
-                    st.success("રસીદ સફળતાપૂર્વક મળી ગઈ છે!")
+                    st.success("રસીદ અને ફોટો સફળતાપૂર્વક મળી ગયા છે!")
                     pdf_bytes = generate_hd_receipt_pdf(rec_data[0], rec_data[1], rec_data[2], rec_data[3], rec_data[4], rec_data[5], rec_data[6], rec_data[7], rec_data[8], rec_data[9], rec_data[10], rec_data[11], rec_data[12], rec_data[13], rec_data[14], rec_data[15], rec_data[16])
-                    st.download_button(label="🖨️ Download Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{rec_data[0]}.pdf", mime="application/pdf")
+                    st.download_button(label="🖨️ Download Printable Receipt with Photo (PDF)", data=pdf_bytes, file_name=f"Receipt_{rec_data[0]}.pdf", mime="application/pdf")
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
@@ -1041,7 +1039,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 sender_city = st.text_input("Sender City/Pin (શહેર/પીન):", value=default_s_city, key=f"cr_s_city_{selected_party}")
                 rec_name = st.text_input("Recipient Name:", key="cr_r_name")
                 rec_address = st.text_input("Recipient Address:", key="cr_r_addr")
-                rec_city = st.text_input("Recipient City/Pin:", value=cr_auto_pin, key="cr_r_city")
+                rec_city = st.text_input("Recipient City/Pin:", value=auto_pin, key="cr_r_city")
             
             col3, col4, col5 = st.columns(3)
             with col3: weight = st.text_input("Weight (Kg):", "1.0", key="cr_wt")
@@ -1053,7 +1051,6 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                     st.error("મહેરબાની કરીને બધી માહિતી ભરો!")
                 else:
                     cr_img_bytes = cr_uploaded_photo.getvalue() if cr_uploaded_photo else None
-                    # બરાબર 18 વેલ્યુઝ
                     data_tuple = (cons_no.strip(), date_entry.strip(), courier_co.strip(), mode.strip(), origin.strip(), dest.strip(), selected_party.strip(), sender_address.strip(), sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), weight.strip(), pcs.strip(), amount.strip(), 'Credit Account', 'Unpaid')
                     try:
                         save_receipt_to_cloud_and_local(data_tuple, cr_img_bytes)
@@ -1076,9 +1073,9 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 rec_data = cursor.fetchone()
                 conn.close()
                 if rec_data:
-                    st.success("રસીદ સફળતાપૂર્વક મળી ગઈ છે!")
+                    st.success("રસીદ અને ફોટો સફળતાપૂર્વક મળી ગયા છે!")
                     pdf_bytes = generate_hd_receipt_pdf(rec_data[0], rec_data[1], rec_data[2], rec_data[3], rec_data[4], rec_data[5], rec_data[6], rec_data[7], rec_data[8], rec_data[9], rec_data[10], rec_data[11], rec_data[12], rec_data[13], rec_data[14], rec_data[15], rec_data[16])
-                    st.download_button(label="🖨️ Download HD Printable Receipt (PDF)", data=pdf_bytes, file_name=f"Receipt_{search_cr_cons}.pdf", mime="application/pdf")
+                    st.download_button(label="🖨️ Download HD Printable Receipt with Photo (PDF)", data=pdf_bytes, file_name=f"Receipt_{search_cr_cons}.pdf", mime="application/pdf")
                 else:
                     st.error("આ કન્સાઇનમેન્ટ નંબરની કોઈ એન્ટ્રી મળી નથી!")
 
