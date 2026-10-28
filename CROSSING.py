@@ -50,7 +50,6 @@ def get_couriers_data():
             return df
     except Exception:
         pass
-    # Default couriers fallback
     return pd.DataFrame([
         {"Courier Name": "DTDC", "Tracking URL": "https://www.dtdc.in/tracking/shipment-tracking.asp?strCnno="},
         {"Courier Name": "Delhivery", "Tracking URL": "https://www.delhivery.com/track/package/"},
@@ -107,7 +106,7 @@ def create_whatsapp_link(phone_num, msg_text):
     encoded_text = urllib.parse.quote(msg_text)
     return f"https://api.whatsapp.com/send?phone={clean_phone}&text={encoded_text}"
 
-def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, packing_info="None", packing_charge="0", tracking_url="", img_bytes=None):
+def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sender_name, sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, amount, booking_type, tracking_url="", img_bytes=None):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=25, leftMargin=25, topMargin=20, bottomMargin=20)
     story = []
@@ -117,7 +116,6 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     f_label_sm = ParagraphStyle('LblSm', fontName='Helvetica-Bold', fontSize=9, leading=11, textColor=colors.black)
     f_val_lg = ParagraphStyle('ValLg', fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=colors.black)
     f_val_huge = ParagraphStyle('ValHuge', fontName='Helvetica-Bold', fontSize=15, leading=18, textColor=colors.black)
-    f_val_blue = ParagraphStyle('ValBlue', fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=colors.blue)
     f_val_green = ParagraphStyle('ValGreen', fontName='Helvetica-Bold', fontSize=15, leading=18, textColor=colors.HexColor('#008000'))
     f_footer = ParagraphStyle('Foot', fontName='Helvetica', fontSize=8, leading=11, textColor=colors.HexColor('#444444'))
     
@@ -166,24 +164,21 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
         ('PADDING', (0,0), (-1,-1), 5),
     ]))
     
-    p_charge_val = f"RS {float(packing_charge):,.2f}" if packing_charge and float(packing_charge) > 0 else "FREE"
     row4_data = [
-        [Paragraph("Pieces", f_label_sm), Paragraph("Weight", f_label_sm), Paragraph("Packing Details", f_label_sm), Paragraph("Packing Charge", f_label_sm), Paragraph("Total Amount", f_label_sm)],
+        [Paragraph("Pieces", f_label_sm), Paragraph("Weight", f_label_sm), Paragraph("Total Amount", f_label_sm)],
         [
             Paragraph(f"<b>{pcs} Pcs</b>", f_val_huge),
             Paragraph(f"<b>{weight} Kg</b>", f_val_huge),
-            Paragraph(f"<b>{packing_info}</b>", f_val_lg),
-            Paragraph(f"<b>{p_charge_val}</b>", f_val_blue),
             Paragraph(f"<b>RS {amount}/-</b>", f_val_green)
         ]
     ]
-    t_row4 = Table(row4_data, colWidths=[80, 80, 150, 115, 120])
+    t_row4 = Table(row4_data, colWidths=[150, 150, 245])
     t_row4.setStyle(TableStyle([
         ('BOX', (0,0), (-1,-1), 1.5, colors.black),
         ('GRID', (0,0), (-1,-1), 1.5, colors.black),
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#F0F4F8')),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('PADDING', (0,0), (-1,-1), 5),
+        ('PADDING', (0,0), (-1,-1), 6),
     ]))
     
     story.append(t_header)
@@ -323,7 +318,7 @@ def generate_pdf_invoice(bill_no, party_name, period_str, bill_date, items, tota
     story.append(t_details)
     story.append(Spacer(1, 15))
     
-    headers = [Paragraph('<b>Sr</b>', bold_style), Paragraph('<b>Cons No</b>', bold_style), Paragraph('<b>Date</b>', bold_style), Paragraph('<b>Courier</b>', bold_style), Paragraph('<b>Dest</b>', bold_style), Paragraph('<b>Recipient</b>', bold_style), Paragraph('<b>Packing</b>', bold_style), Paragraph('<b>Amount</b>', bold_style)]
+    headers = [Paragraph('<b>Sr</b>', bold_style), Paragraph('<b>Cons No</b>', bold_style), Paragraph('<b>Date</b>', bold_style), Paragraph('<b>Courier</b>', bold_style), Paragraph('<b>Dest</b>', bold_style), Paragraph('<b>Recipient</b>', bold_style), Paragraph('<b>Amount</b>', bold_style)]
     data = [headers]
     for idx, r in enumerate(items, 1):
         data.append([
@@ -333,10 +328,9 @@ def generate_pdf_invoice(bill_no, party_name, period_str, bill_date, items, tota
             Paragraph(str(r.get('Courier Co', 'DTDC')), bold_style),
             Paragraph(str(r.get('Destination', '')), normal_style),
             Paragraph(str(r.get('Receiver Name', '')), normal_style),
-            Paragraph(str(r.get('Packing Info', 'Free')), normal_style),
             Paragraph(f"RS {float(r.get('Amount', 0)):,.2f}", normal_style)
         ])
-    t_items = Table(data, colWidths=[25, 85, 60, 65, 75, 95, 85, 55])
+    t_items = Table(data, colWidths=[25, 95, 65, 75, 85, 115, 80])
     t_items.setStyle(TableStyle([('BACKGROUND', (0,0), (-1,0), colors.HexColor('#002147')), ('TEXTCOLOR', (0,0), (-1,0), colors.white), ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#cccccc')), ('PADDING', (0,0), (-1,-1), 5)]))
     story.append(t_items)
     story.append(Spacer(1, 15))
@@ -394,7 +388,7 @@ st.sidebar.header("⚙️ નેવિગેશન & ફિલ્ટર")
 menu = st.sidebar.radio("મેનુ પસંદ કરો (Menu)", [
     "➕ Add Account Party (પાર્ટી ઉમેરો)",
     "🚚 Add Courier Master (કુરિયર અને ટ્રેકિંગ URL ઉમેરો)",
-    "💵 Cash Courier Booking (કેશ બુકિંગ & પેકિંગ)",
+    "💵 Cash Courier Booking (કેશ બુકિંગ)",
     "📦 Separate Packing Service (અલગ પેકિંગ સર્વિસ રિસીપ્ટ)",
     "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)",
     "📊 Party Monthly Billing (ડિજિટલ પીડીએફ બિલ)",
@@ -468,8 +462,8 @@ elif menu == "🚚 Add Courier Master (કુરિયર અને ટ્રે
     if not df_couriers.empty:
         st.dataframe(df_couriers, use_container_width=True)
 
-# ----------------- ૩. CASH BOOKING WITH PACKING -----------------
-elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & પેકિંગ)":
+# ----------------- ૩. CASH BOOKING (WITHOUT PACKING) -----------------
+elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ)":
     tab1, tab2, tab3 = st.tabs(["💵 Cash Booking (નવી એન્ટ્રી)", "📜 Cash History", "🖨️ Re-Print Receipt"])
     
     df_couriers = get_couriers_data()
@@ -477,7 +471,7 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & પે�
     courier_url_dict = dict(zip(df_couriers["Courier Name"], df_couriers["Tracking URL"])) if not df_couriers.empty else {}
 
     with tab1:
-        st.subheader("Cash Courier Booking with Packing Charges")
+        st.subheader("Cash Courier Booking")
         uploaded_photo = st.file_uploader("📷 પાર્સલ/લેબલનો ફોટો અપલોડ કરો:", type=["jpg", "jpeg", "png"], key="c_photo")
         auto_cons, auto_pin = "", ""
         if uploaded_photo:
@@ -499,37 +493,21 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & પે�
             rec_address = st.text_input("Recipient Address:", key="c_r_addr")
             rec_city = st.text_input("Recipient City/Pin:", value=auto_pin, key="c_r_city")
 
-        st.markdown("---")
-        st.write("### 📦 Courier Packing & Material Options")
-        p_col1, p_col2, p_col3 = st.columns(3)
-        with p_col1:
-            packing_option = st.selectbox("Select Packing Type:", ["Free Packing", "Cellotape", "Box Packing", "Online Bag", "Custom Packing"])
-        with p_col2:
-            packing_charge_input = st.text_input("Packing Charge (RS):", "0")
-        with p_col3:
-            weight = st.text_input("Weight (Kg):", "1.0", key="c_wt")
-
-        col3, col4 = st.columns(2)
-        with col3: pcs = st.text_input("Pieces (Pcs):", "1", key="c_pcs")
-        with col4: amount = st.text_input("Courier Freight Amount (RS):", key="c_amt")
+        col3, col4, col5 = st.columns(3)
+        with col3: weight = st.text_input("Weight (Kg):", "1.0", key="c_wt")
+        with col4: pcs = st.text_input("Pieces (Pcs):", "1", key="c_pcs")
+        with col5: amount = st.text_input("Total Amount (RS):", key="c_amt")
         
         c_whatsapp_num = st.text_input("Customer WhatsApp Mobile No:", key="c_wa_num")
         c_initial_pay_status = st.selectbox("Payment Status:", ["Paid (ચૂકવાઈ ગયું)", "Unpaid (બાકી)"], key="c_init_status")
 
-        if st.button("💾 Save & Generate Receipt with Packing", type="primary"):
+        if st.button("💾 Save & Generate Receipt", type="primary"):
             if not cons_no or not sender_name or not rec_name or not amount:
                 st.error("જરૂરી ખાના ભરો!")
             else:
                 img_bytes = uploaded_photo.getvalue() if uploaded_photo else None
                 status_val = "Paid" if "Paid" in c_initial_pay_status else "Unpaid"
                 
-                try:
-                    freight_amt = float(amount) if amount else 0.0
-                    pack_amt = float(packing_charge_input) if packing_charge_input else 0.0
-                    total_final_amt = freight_amt + pack_amt
-                except Exception:
-                    total_final_amt = amount
-
                 df_courier = get_courier_data()
                 new_row = pd.DataFrame([{
                     "Date": date_entry,
@@ -546,12 +524,12 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & પે�
                     "Receiver City": rec_city.strip(),
                     "Weight": weight.strip(),
                     "Pcs": pcs.strip(),
-                    "Amount": str(total_final_amt),
+                    "Amount": amount.strip(),
                     "Booking Type": "Cash",
                     "Bill No": "",
                     "Payment Status": status_val,
-                    "Packing Info": packing_option,
-                    "Packing Charge": packing_charge_input.strip()
+                    "Packing Info": "None",
+                    "Packing Charge": "0"
                 }])
                 updated_df = pd.concat([df_courier, new_row], ignore_index=True)
                 conn.update(worksheet="Courier_Entries", data=updated_df)
@@ -561,7 +539,7 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & પે�
                 pdf_bytes = generate_hd_receipt_pdf(
                     cons_no, date_entry, selected_courier, mode, origin, dest, sender_name, 
                     sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, 
-                    str(total_final_amt), 'Cash', packing_option, packing_charge_input, t_url, img_bytes
+                    amount.strip(), 'Cash', t_url, img_bytes
                 )
                 st.download_button(label="📄 Download Printable PDF Receipt", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf", type="primary")
 
@@ -594,8 +572,7 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ & પે�
                         rec.get("Origin", ""), rec.get("Destination", ""), rec.get("Sender Name", ""), 
                         rec.get("Sender Address", ""), rec.get("Sender City", ""), rec.get("Receiver Name", ""), 
                         rec.get("Receiver Address", ""), rec.get("Receiver City", ""), rec.get("Weight", "1"), 
-                        rec.get("Pcs", "1"), rec.get("Amount", "0"), rec.get("Booking Type", "Cash"), 
-                        rec.get("Packing Info", "Free"), rec.get("Packing Charge", "0"), t_url, None
+                        rec.get("Pcs", "1"), rec.get("Amount", "0"), rec.get("Booking Type", "Cash"), t_url, None
                     )
                     st.download_button(label="🖨️ Download PDF", data=pdf_bytes, file_name=f"Receipt_{search_cons}.pdf", mime="application/pdf", type="primary")
                 else:
@@ -659,9 +636,9 @@ elif menu == "📦 Separate Packing Service (અલગ પેકિંગ સર
     else:
         st.info("કોઈ પેકિંગ રિસીપ્ટ એન્ટ્રી નથી.")
 
-# ----------------- ૫. CREDIT ACCOUNT BOOKING -----------------
+# ----------------- ૫. CREDIT ACCOUNT BOOKING (WITHOUT PACKING) -----------------
 elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)":
-    st.subheader("Credit Account Booking with Packing Charges")
+    st.subheader("Credit Account Booking")
     df_parties = get_parties_data()
     df_couriers = get_couriers_data()
     
@@ -696,28 +673,17 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
             rec_address = st.text_input("Recipient Address:", key="cr_r_addr")
             rec_city = st.text_input("Recipient City/Pin:", value=cr_auto_pin, key="cr_r_city")
         
-        st.markdown("---")
-        p_col1, p_col2 = st.columns(2)
-        with p_col1: packing_option = st.selectbox("Select Packing Type:", ["Free Packing", "Cellotape", "Box Packing", "Online Bag", "Custom Packing"], key="cr_pack")
-        with p_col2: packing_charge_input = st.text_input("Packing Charge (RS):", "0", key="cr_pack_amt")
-
         col3, col4, col5 = st.columns(3)
         with col3: weight = st.text_input("Weight (Kg):", "1.0", key="cr_wt")
         with col4: pcs = st.text_input("Pieces (Pcs):", "1", key="cr_pcs")
-        with col5: amount = st.text_input("Freight Amount (RS):", key="cr_amt")
+        with col5: amount = st.text_input("Amount (RS):", key="cr_amt")
         
-        if st.button("💾 Save Credit Booking with Packing to Cloud", type="primary"):
+        if st.button("💾 Save Credit Booking to Cloud", type="primary"):
             if not cons_no or not rec_name or not amount:
                 st.error("બધી માહિતી ભરો!")
             else:
                 cr_img_bytes = cr_uploaded_photo.getvalue() if cr_uploaded_photo else None
-                try:
-                    freight_amt = float(amount) if amount else 0.0
-                    pack_amt = float(packing_charge_input) if packing_charge_input else 0.0
-                    total_final_amt = freight_amt + pack_amt
-                except Exception:
-                    total_final_amt = amount
-
+                
                 df_courier = get_courier_data()
                 new_row = pd.DataFrame([{
                     "Date": date_entry,
@@ -734,12 +700,12 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                     "Receiver City": rec_city.strip(),
                     "Weight": weight.strip(),
                     "Pcs": pcs.strip(),
-                    "Amount": str(total_final_amt),
+                    "Amount": amount.strip(),
                     "Booking Type": "Credit Account",
                     "Bill No": "",
                     "Payment Status": "Unpaid",
-                    "Packing Info": packing_option,
-                    "Packing Charge": packing_charge_input.strip()
+                    "Packing Info": "None",
+                    "Packing Charge": "0"
                 }])
                 updated_df = pd.concat([df_courier, new_row], ignore_index=True)
                 conn.update(worksheet="Courier_Entries", data=updated_df)
@@ -749,7 +715,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 pdf_bytes = generate_hd_receipt_pdf(
                     cons_no, date_entry, selected_courier, mode, origin, dest, selected_party, 
                     sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, 
-                    str(total_final_amt), 'Credit Account', packing_option, packing_charge_input, t_url, cr_img_bytes
+                    amount.strip(), 'Credit Account', t_url, cr_img_bytes
                 )
                 st.download_button(label="🖨️ Download Credit Receipt PDF", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf", type="primary")
 
@@ -783,7 +749,6 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ પીડીએફ 
                     updated_bills = pd.concat([df_bills, new_bill_row], ignore_index=True)
                     conn.update(worksheet="Bills", data=updated_bills)
 
-                    # Update bill no in courier entries
                     for idx in b_rows_df.index:
                         df_courier.loc[idx, "Bill No"] = generated_bill_no
                     conn.update(worksheet="Courier_Entries", data=df_courier)
