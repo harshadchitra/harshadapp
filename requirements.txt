@@ -1,4 +1,5 @@
 streamlit
 reportlab
 Pillow
-psycopg2-binary
+pandas
+st-gsheets-connection
