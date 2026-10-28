@@ -1,10 +1,11 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import datetime
 import io
 import urllib.parse
 import re
+import requests
+import json
 from PIL import Image
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -26,7 +27,25 @@ except ImportError:
 # Page Configuration
 st.set_page_config(page_title="Courier Solution", page_icon="📦", layout="centered")
 
-# ----------------- 🔄 ગૂગલ શીટ્સ કનેક્શન સેટઅપ -----------------
+# ----------------- 🔄 ગૂગલ એપ્સ સ્ક્રિપ્ટ ક્લાઉડ કનેક્શન સેટઅપ -----------------
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycby96uy9MqY8rKeIMSdnNRvVLcRkwcI6vAZI6KrEJLi4yVzhrTuea8tO-lrzRzuw1l8u3g/exec"
+
+def save_to_google_sheet(sheet_name, row_data, headers_list):
+    try:
+        payload = {
+            "sheet": sheet_name,
+            "headers": headers_list,
+            "row": row_data
+        }
+        response = requests.post(WEB_APP_URL, json=payload)
+        return response.status_code == 200
+    except Exception as e:
+        print("Sheet Save Error:", e)
+        return False
+
+# નોટ: આ લાઈબ્રેરીઓ સ્ટ્રીમલિટ ક્લાઉડ કનેક્શન માટે છે, જો ડેટા રીડ કરવો હોય તો Google Sheets API અથવા gspread વાપરી શકાય.
+# સરળતા માટે આપણે પાયથોન ડેટા ફ્રેમ મેનેજમેન્ટ રાખીશું.
+from streamlit_gsheets import GSheetsConnection
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_courier_data():
@@ -380,7 +399,7 @@ def generate_payment_pdf_receipt(rec_id, party_name, bill_no, pay_date, pay_amou
 
 # ----------------- DASHBOARD UI -----------------
 st.title("📦 COURIER SOLUTION")
-st.caption("Express Cargo & Logistics Management System (Google Sheets Cloud Mode)")
+st.caption("Express Cargo & Logistics Management System (Google Apps Script API Mode)")
 st.markdown("---")
 
 # SIDEBAR NAVIGATION
@@ -421,14 +440,9 @@ if menu == "➕ Add Account Party (પાર્ટી ઉમેરો)":
             if not p_name.strip():
                 st.error("પાર્ટીનું નામ ભરો!")
             else:
-                new_row = pd.DataFrame([{
-                    "Party Name": p_name.strip(),
-                    "Address": p_addr.strip(),
-                    "City": p_city.strip(),
-                    "Mobile": p_mob.strip()
-                }])
-                updated_parties = pd.concat([df_parties, new_row], ignore_index=True)
-                conn.update(worksheet="Parties", data=updated_parties)
+                headers = ["Party Name", "Address", "City", "Mobile"]
+                row_vals = [p_name.strip(), p_addr.strip(), p_city.strip(), p_mob.strip()]
+                save_to_google_sheet("Parties", row_vals, headers)
                 st.success(f"પાર્ટી '{p_name}' ગૂગલ શીટમાં સેવ થઈ ગઈ છે!")
                 st.rerun()
 
@@ -449,12 +463,9 @@ elif menu == "🚚 Add Courier Master (કુરિયર અને ટ્રે
         c_url_input = st.text_input("Tracking Base URL:")
         submit_courier = st.form_submit_button("💾 Save Courier", type="primary")
         if submit_courier and c_name_input.strip() and c_url_input.strip():
-            new_c_row = pd.DataFrame([{
-                "Courier Name": c_name_input.strip(),
-                "Tracking URL": c_url_input.strip()
-            }])
-            updated_couriers = pd.concat([df_couriers, new_c_row], ignore_index=True)
-            conn.update(worksheet="Couriers", data=updated_couriers)
+            headers = ["Courier Name", "Tracking URL"]
+            row_vals = [c_name_input.strip(), c_url_input.strip()]
+            save_to_google_sheet("Couriers", row_vals, headers)
             st.success("કુરિયર ગૂગલ શીટમાં સેવ થઈ ગયું છે!")
             st.rerun()
 
@@ -462,7 +473,7 @@ elif menu == "🚚 Add Courier Master (કુરિયર અને ટ્રે
     if not df_couriers.empty:
         st.dataframe(df_couriers, use_container_width=True)
 
-# ----------------- ૩. CASH BOOKING (WITHOUT PACKING) -----------------
+# ----------------- ૩. CASH BOOKING -----------------
 elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ)":
     tab1, tab2, tab3 = st.tabs(["💵 Cash Booking (નવી એન્ટ્રી)", "📜 Cash History", "🖨️ Re-Print Receipt"])
     
@@ -508,31 +519,20 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ)":
                 img_bytes = uploaded_photo.getvalue() if uploaded_photo else None
                 status_val = "Paid" if "Paid" in c_initial_pay_status else "Unpaid"
                 
-                df_courier = get_courier_data()
-                new_row = pd.DataFrame([{
-                    "Date": date_entry,
-                    "Tracking Number": cons_no.strip(),
-                    "Courier Co": selected_courier.strip(),
-                    "Mode": mode.strip(),
-                    "Origin": origin.strip(),
-                    "Destination": dest.strip(),
-                    "Sender Name": sender_name.strip(),
-                    "Sender Address": sender_address.strip(),
-                    "Sender City": sender_city.strip(),
-                    "Receiver Name": rec_name.strip(),
-                    "Receiver Address": rec_address.strip(),
-                    "Receiver City": rec_city.strip(),
-                    "Weight": weight.strip(),
-                    "Pcs": pcs.strip(),
-                    "Amount": amount.strip(),
-                    "Booking Type": "Cash",
-                    "Bill No": "",
-                    "Payment Status": status_val,
-                    "Packing Info": "None",
-                    "Packing Charge": "0"
-                }])
-                updated_df = pd.concat([df_courier, new_row], ignore_index=True)
-                conn.update(worksheet="Courier_Entries", data=updated_df)
+                headers = [
+                    "Date", "Tracking Number", "Courier Co", "Mode", "Origin", "Destination", 
+                    "Sender Name", "Sender Address", "Sender City", "Receiver Name", "Receiver Address", 
+                    "Receiver City", "Weight", "Pcs", "Amount", "Booking Type", "Bill No", 
+                    "Payment Status", "Packing Info", "Packing Charge"
+                ]
+                row_vals = [
+                    date_entry, cons_no.strip(), selected_courier.strip(), mode.strip(), 
+                    origin.strip(), dest.strip(), sender_name.strip(), sender_address.strip(), 
+                    sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), 
+                    weight.strip(), pcs.strip(), amount.strip(), 'Cash', "", status_val, "None", "0"
+                ]
+                
+                save_to_google_sheet("Courier_Entries", row_vals, headers)
                 st.success(f"✅ કેશ બુકિંગ ગૂગલ શીટમાં સેવ થઈ ગયું છે!")
                 
                 t_url = courier_url_dict.get(selected_courier, "")
@@ -561,18 +561,18 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ)":
         if st.button("🔍 Search & Print", type="primary"):
             if search_cons.strip():
                 df_courier = get_courier_data()
-                matched = df_courier[df_courier["Tracking Number"] == search_cons.strip()]
+                matched = df_courier[df_courier["Tracking Number"].astype(str) == search_cons.strip()]
                 if not matched.empty:
                     rec = matched.iloc[0]
                     st.success("રસીદ મળી ગઈ છે!")
                     c_co_name = rec.get("Courier Co", "DTDC")
                     t_url = courier_url_dict.get(c_co_name, "")
                     pdf_bytes = generate_hd_receipt_pdf(
-                        rec["Tracking Number"], rec["Date"], c_co_name, rec.get("Mode", "Surface"), 
-                        rec.get("Origin", ""), rec.get("Destination", ""), rec.get("Sender Name", ""), 
-                        rec.get("Sender Address", ""), rec.get("Sender City", ""), rec.get("Receiver Name", ""), 
-                        rec.get("Receiver Address", ""), rec.get("Receiver City", ""), rec.get("Weight", "1"), 
-                        rec.get("Pcs", "1"), rec.get("Amount", "0"), rec.get("Booking Type", "Cash"), t_url, None
+                        str(rec["Tracking Number"]), str(rec["Date"]), c_co_name, str(rec.get("Mode", "Surface")), 
+                        str(rec.get("Origin", "")), str(rec.get("Destination", "")), str(rec.get("Sender Name", "")), 
+                        str(rec.get("Sender Address", "")), str(rec.get("Sender City", "")), str(rec.get("Receiver Name", "")), 
+                        str(rec.get("Receiver Address", "")), str(rec.get("Receiver City", "")), str(rec.get("Weight", "1")), 
+                        str(rec.get("Pcs", "1")), str(rec.get("Amount", "0")), str(rec.get("Booking Type", "Cash")), t_url, None
                     )
                     st.download_button(label="🖨️ Download PDF", data=pdf_bytes, file_name=f"Receipt_{search_cons}.pdf", mime="application/pdf", type="primary")
                 else:
@@ -613,16 +613,9 @@ elif menu == "📦 Separate Packing Service (અલગ પેકિંગ સર
             p_count = len(df_packs) + 1
             rec_no = f"PACK-REC-{p_count:04d}"
 
-            new_pack_row = pd.DataFrame([{
-                "Receipt No": rec_no,
-                "Date": pack_date.strip(),
-                "Customer Name": cust_name.strip(),
-                "Mobile": cust_mob.strip(),
-                "Packing Items": items_str,
-                "Total Charge": total_pack_charge.strip()
-            }])
-            updated_packs = pd.concat([df_packs, new_pack_row], ignore_index=True)
-            conn.update(worksheet="Packing_Receipts", data=updated_packs)
+            headers = ["Receipt No", "Date", "Customer Name", "Mobile", "Packing Items", "Total Charge"]
+            row_vals = [rec_no, pack_date.strip(), cust_name.strip(), cust_mob.strip(), items_str, total_pack_charge.strip()]
+            save_to_google_sheet("Packing_Receipts", row_vals, headers)
             st.success(f"પેકિંગ રિસીપ્ટ ગૂગલ શીટમાં સેવ થઈ ગઈ છે! [Receipt No: {rec_no}]")
             
             pdf_pack_bytes = generate_packing_pdf_receipt(rec_no, pack_date, cust_name, cust_mob, items_str, total_pack_charge)
@@ -636,7 +629,7 @@ elif menu == "📦 Separate Packing Service (અલગ પેકિંગ સર
     else:
         st.info("કોઈ પેકિંગ રિસીપ્ટ એન્ટ્રી નથી.")
 
-# ----------------- ૫. CREDIT ACCOUNT BOOKING (WITHOUT PACKING) -----------------
+# ----------------- ૫. CREDIT ACCOUNT BOOKING -----------------
 elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન્ટ બુકિંગ)":
     st.subheader("Credit Account Booking")
     df_parties = get_parties_data()
@@ -684,31 +677,20 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
             else:
                 cr_img_bytes = cr_uploaded_photo.getvalue() if cr_uploaded_photo else None
                 
-                df_courier = get_courier_data()
-                new_row = pd.DataFrame([{
-                    "Date": date_entry,
-                    "Tracking Number": cons_no.strip(),
-                    "Courier Co": selected_courier.strip(),
-                    "Mode": mode.strip(),
-                    "Origin": origin.strip(),
-                    "Destination": dest.strip(),
-                    "Sender Name": selected_party.strip(),
-                    "Sender Address": sender_address.strip(),
-                    "Sender City": sender_city.strip(),
-                    "Receiver Name": rec_name.strip(),
-                    "Receiver Address": rec_address.strip(),
-                    "Receiver City": rec_city.strip(),
-                    "Weight": weight.strip(),
-                    "Pcs": pcs.strip(),
-                    "Amount": amount.strip(),
-                    "Booking Type": "Credit Account",
-                    "Bill No": "",
-                    "Payment Status": "Unpaid",
-                    "Packing Info": "None",
-                    "Packing Charge": "0"
-                }])
-                updated_df = pd.concat([df_courier, new_row], ignore_index=True)
-                conn.update(worksheet="Courier_Entries", data=updated_df)
+                headers = [
+                    "Date", "Tracking Number", "Courier Co", "Mode", "Origin", "Destination", 
+                    "Sender Name", "Sender Address", "Sender City", "Receiver Name", "Receiver Address", 
+                    "Receiver City", "Weight", "Pcs", "Amount", "Booking Type", "Bill No", 
+                    "Payment Status", "Packing Info", "Packing Charge"
+                ]
+                row_vals = [
+                    date_entry, cons_no.strip(), selected_courier.strip(), mode.strip(), 
+                    origin.strip(), dest.strip(), selected_party.strip(), sender_address.strip(), 
+                    sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), 
+                    weight.strip(), pcs.strip(), amount.strip(), 'Credit Account', "", 'Unpaid', "None", "0"
+                ]
+                
+                save_to_google_sheet("Courier_Entries", row_vals, headers)
                 st.success(f"✅ ક્રેડિટ બુકિંગ ગૂગલ શીટમાં સેવ થઈ ગયું છે!")
                 
                 t_url = courier_url_dict.get(selected_courier, "")
@@ -739,19 +721,9 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ પીડીએફ 
                     generated_bill_no = f"BILL-2026-{b_count:03d}"
                     tot_bill = sum(float(x) for x in b_rows_df["Amount"] if x)
 
-                    new_bill_row = pd.DataFrame([{
-                        "Bill No": generated_bill_no,
-                        "Party Name": sel_party,
-                        "Bill Date": today.strftime("%d/%m/%Y"),
-                        "Period": f"{start_str} to {end_str}",
-                        "Total Amount": str(tot_bill)
-                    }])
-                    updated_bills = pd.concat([df_bills, new_bill_row], ignore_index=True)
-                    conn.update(worksheet="Bills", data=updated_bills)
-
-                    for idx in b_rows_df.index:
-                        df_courier.loc[idx, "Bill No"] = generated_bill_no
-                    conn.update(worksheet="Courier_Entries", data=df_courier)
+                    headers_b = ["Bill No", "Party Name", "Bill Date", "Period", "Total Amount"]
+                    row_vals_b = [generated_bill_no, sel_party, today.strftime("%d/%m/%Y"), f"{start_str} to {end_str}", str(tot_bill)]
+                    save_to_google_sheet("Bills", row_vals_b, headers_b)
 
                     items_list = b_rows_df.to_dict(orient="records")
                     pdf_bytes = generate_pdf_invoice(generated_bill_no, sel_party, f"{start_str} to {end_str}", today.strftime("%d/%m/%Y"), items_list, tot_bill)
@@ -777,16 +749,9 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
         if sub and pay_amt.strip():
             df_pays = get_party_payments_data()
             rec_id = len(df_pays) + 1
-            new_pay_row = pd.DataFrame([{
-                "Party Name": pay_party,
-                "Bill No": "DIRECT",
-                "Date": today.strftime("%d/%m/%Y"),
-                "Amount": pay_amt.strip(),
-                "Pay Mode": pay_mode,
-                "Note": ""
-            }])
-            updated_pays = pd.concat([df_pays, new_pay_row], ignore_index=True)
-            conn.update(worksheet="Party_Payments", data=updated_pays)
+            headers_p = ["Party Name", "Bill No", "Date", "Amount", "Pay Mode", "Note"]
+            row_vals_p = [pay_party, "DIRECT", today.strftime("%d/%m/%Y"), pay_amt.strip(), pay_mode, ""]
+            save_to_google_sheet("Party_Payments", row_vals_p, headers_p)
             st.success("પેમેન્ટ જમા થઈ ગયું!")
             pdf_b = generate_payment_pdf_receipt(rec_id, pay_party, "DIRECT", today.strftime("%d/%m/%Y"), pay_amt, pay_mode, "")
             st.download_button("Download Receipt", data=pdf_b, file_name=f"Pay_{rec_id}.pdf", mime="application/pdf", type="primary")
