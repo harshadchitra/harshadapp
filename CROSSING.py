@@ -27,8 +27,21 @@ except ImportError:
 # Page Configuration
 st.set_page_config(page_title="Courier Solution", page_icon="📦", layout="centered")
 
-# ----------------- 🔄 ગૂગલ એપ્સ સ્ક્રિપ્ટ ક્લાઉડ કનેક્શન સેટઅપ -----------------
+# ----------------- 🔄 ગૂગલ એપ્સ સ્ક્રિપ્ટ ક્લાઉડ કનેક્શન -----------------
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycby96uy9MqY8rKeIMSdnNRvVLcRkwcI6vAZI6KrEJLi4yVzhrTuea8tO-lrzRzuw1l8u3g/exec"
+
+def get_google_sheet_data(sheet_name):
+    try:
+        url = f"{WEB_APP_URL}?sheet={sheet_name}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            if data:
+                return pd.DataFrame(data)
+        return pd.DataFrame()
+    except Exception as e:
+        print("Read Error:", e)
+        return pd.DataFrame()
 
 def save_to_google_sheet(sheet_name, row_data, headers_list):
     try:
@@ -40,35 +53,20 @@ def save_to_google_sheet(sheet_name, row_data, headers_list):
         response = requests.post(WEB_APP_URL, json=payload)
         return response.status_code == 200
     except Exception as e:
-        print("Sheet Save Error:", e)
+        print("Save Error:", e)
         return False
 
-# નોટ: આ લાઈબ્રેરીઓ સ્ટ્રીમલિટ ક્લાઉડ કનેક્શન માટે છે, જો ડેટા રીડ કરવો હોય તો Google Sheets API અથવા gspread વાપરી શકાય.
-# સરળતા માટે આપણે પાયથોન ડેટા ફ્રેમ મેનેજમેન્ટ રાખીશું.
-from streamlit_gsheets import GSheetsConnection
-conn = st.connection("gsheets", type=GSheetsConnection)
-
+# ક્લાઉડ શીટમાંથી ડેટા રીડ કરવા માટેના ફંક્શન્સ
 def get_courier_data():
-    try:
-        df = conn.read(worksheet="Courier_Entries", ttl=0)
-        return df if df is not None else pd.DataFrame()
-    except Exception:
-        return pd.DataFrame()
+    return get_google_sheet_data("Courier_Entries")
 
 def get_parties_data():
-    try:
-        df = conn.read(worksheet="Parties", ttl=0)
-        return df if df is not None else pd.DataFrame()
-    except Exception:
-        return pd.DataFrame()
+    return get_google_sheet_data("Parties")
 
 def get_couriers_data():
-    try:
-        df = conn.read(worksheet="Couriers", ttl=0)
-        if df is not None and not df.empty:
-            return df
-    except Exception:
-        pass
+    df = get_google_sheet_data("Couriers")
+    if df is not None and not df.empty:
+        return df
     return pd.DataFrame([
         {"Courier Name": "DTDC", "Tracking URL": "https://www.dtdc.in/tracking/shipment-tracking.asp?strCnno="},
         {"Courier Name": "Delhivery", "Tracking URL": "https://www.delhivery.com/track/package/"},
@@ -76,25 +74,13 @@ def get_couriers_data():
     ])
 
 def get_packing_receipts_data():
-    try:
-        df = conn.read(worksheet="Packing_Receipts", ttl=0)
-        return df if df is not None else pd.DataFrame()
-    except Exception:
-        return pd.DataFrame()
+    return get_google_sheet_data("Packing_Receipts")
 
 def get_party_payments_data():
-    try:
-        df = conn.read(worksheet="Party_Payments", ttl=0)
-        return df if df is not None else pd.DataFrame()
-    except Exception:
-        return pd.DataFrame()
+    return get_google_sheet_data("Party_Payments")
 
 def get_bills_data():
-    try:
-        df = conn.read(worksheet="Bills", ttl=0)
-        return df if df is not None else pd.DataFrame()
-    except Exception:
-        return pd.DataFrame()
+    return get_google_sheet_data("Bills")
 
 # ----------------- AI PHOTO AUTO-FILL SCANNER FUNCTION -----------------
 def scan_label_image(image_bytes):
@@ -138,7 +124,7 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     f_val_green = ParagraphStyle('ValGreen', fontName='Helvetica-Bold', fontSize=15, leading=18, textColor=colors.HexColor('#008000'))
     f_footer = ParagraphStyle('Foot', fontName='Helvetica', fontSize=8, leading=11, textColor=colors.HexColor('#444444'))
     
-    barcode_obj = code128.Code128(cons_no, barHeight=28, barWidth=1.4)
+    barcode_obj = code128.Code128(str(cons_no), barHeight=28, barWidth=1.4)
     
     header_data = [
         [Paragraph("📦 <b>COURIER SOLUTION</b>", f_header_title), Paragraph("Consignment Number", f_label_sm)],
@@ -209,7 +195,7 @@ def generate_hd_receipt_pdf(cons_no, date, courier_co, mode, origin, dest, sende
     story.append(t_row4)
     story.append(Spacer(1, 6))
     
-    full_track_link = tracking_url + cons_no if tracking_url else ""
+    full_track_link = tracking_url + str(cons_no) if tracking_url else ""
     if full_track_link:
         try:
             qr_widget = qr.QrCodeWidget(full_track_link)
@@ -526,10 +512,10 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ)":
                     "Payment Status", "Packing Info", "Packing Charge"
                 ]
                 row_vals = [
-                    date_entry, cons_no.strip(), selected_courier.strip(), mode.strip(), 
+                    date_entry, str(cons_no).strip(), selected_courier.strip(), mode.strip(), 
                     origin.strip(), dest.strip(), sender_name.strip(), sender_address.strip(), 
                     sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), 
-                    weight.strip(), pcs.strip(), amount.strip(), 'Cash', "", status_val, "None", "0"
+                    str(weight).strip(), str(pcs).strip(), str(amount).strip(), 'Cash', "", status_val, "None", "0"
                 ]
                 
                 save_to_google_sheet("Courier_Entries", row_vals, headers)
@@ -539,14 +525,14 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ)":
                 pdf_bytes = generate_hd_receipt_pdf(
                     cons_no, date_entry, selected_courier, mode, origin, dest, sender_name, 
                     sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, 
-                    amount.strip(), 'Cash', t_url, img_bytes
+                    str(amount).strip(), 'Cash', t_url, img_bytes
                 )
                 st.download_button(label="📄 Download Printable PDF Receipt", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf", type="primary")
 
     with tab2:
         st.subheader("📜 Cash Booking Records")
         df_courier = get_courier_data()
-        if not df_courier.empty:
+        if not df_courier.empty and "Booking Type" in df_courier.columns:
             cash_df = df_courier[df_courier["Booking Type"] == "Cash"]
             if not cash_df.empty:
                 st.dataframe(cash_df, use_container_width=True)
@@ -561,22 +547,25 @@ elif menu == "💵 Cash Courier Booking (કેશ બુકિંગ)":
         if st.button("🔍 Search & Print", type="primary"):
             if search_cons.strip():
                 df_courier = get_courier_data()
-                matched = df_courier[df_courier["Tracking Number"].astype(str) == search_cons.strip()]
-                if not matched.empty:
-                    rec = matched.iloc[0]
-                    st.success("રસીદ મળી ગઈ છે!")
-                    c_co_name = rec.get("Courier Co", "DTDC")
-                    t_url = courier_url_dict.get(c_co_name, "")
-                    pdf_bytes = generate_hd_receipt_pdf(
-                        str(rec["Tracking Number"]), str(rec["Date"]), c_co_name, str(rec.get("Mode", "Surface")), 
-                        str(rec.get("Origin", "")), str(rec.get("Destination", "")), str(rec.get("Sender Name", "")), 
-                        str(rec.get("Sender Address", "")), str(rec.get("Sender City", "")), str(rec.get("Receiver Name", "")), 
-                        str(rec.get("Receiver Address", "")), str(rec.get("Receiver City", "")), str(rec.get("Weight", "1")), 
-                        str(rec.get("Pcs", "1")), str(rec.get("Amount", "0")), str(rec.get("Booking Type", "Cash")), t_url, None
-                    )
-                    st.download_button(label="🖨️ Download PDF", data=pdf_bytes, file_name=f"Receipt_{search_cons}.pdf", mime="application/pdf", type="primary")
+                if not df_courier.empty and "Tracking Number" in df_courier.columns:
+                    matched = df_courier[df_courier["Tracking Number"].astype(str) == search_cons.strip()]
+                    if not matched.empty:
+                        rec = matched.iloc[0]
+                        st.success("રસીદ મળી ગઈ છે!")
+                        c_co_name = rec.get("Courier Co", "DTDC")
+                        t_url = courier_url_dict.get(c_co_name, "")
+                        pdf_bytes = generate_hd_receipt_pdf(
+                            str(rec["Tracking Number"]), str(rec["Date"]), c_co_name, str(rec.get("Mode", "Surface")), 
+                            str(rec.get("Origin", "")), str(rec.get("Destination", "")), str(rec.get("Sender Name", "")), 
+                            str(rec.get("Sender Address", "")), str(rec.get("Sender City", "")), str(rec.get("Receiver Name", "")), 
+                            str(rec.get("Receiver Address", "")), str(rec.get("Receiver City", "")), str(rec.get("Weight", "1")), 
+                            str(rec.get("Pcs", "1")), str(rec.get("Amount", "0")), str(rec.get("Booking Type", "Cash")), t_url, None
+                        )
+                        st.download_button(label="🖨️ Download PDF", data=pdf_bytes, file_name=f"Receipt_{search_cons}.pdf", mime="application/pdf", type="primary")
+                    else:
+                        st.error("કોઈ એન્ટ્રી મળી નથી!")
                 else:
-                    st.error("કોઈ એન્ટ્રી મળી નથી!")
+                    st.error("ડેટાબેઝ ખાલી છે!")
 
 # ----------------- ૪. SEPARATE PACKING SERVICE -----------------
 elif menu == "📦 Separate Packing Service (અલગ પેકિંગ સર્વિસ રિસીપ્ટ)":
@@ -614,7 +603,7 @@ elif menu == "📦 Separate Packing Service (અલગ પેકિંગ સર
             rec_no = f"PACK-REC-{p_count:04d}"
 
             headers = ["Receipt No", "Date", "Customer Name", "Mobile", "Packing Items", "Total Charge"]
-            row_vals = [rec_no, pack_date.strip(), cust_name.strip(), cust_mob.strip(), items_str, total_pack_charge.strip()]
+            row_vals = [rec_no, pack_date.strip(), cust_name.strip(), cust_mob.strip(), items_str, str(total_pack_charge).strip()]
             save_to_google_sheet("Packing_Receipts", row_vals, headers)
             st.success(f"પેકિંગ રિસીપ્ટ ગૂગલ શીટમાં સેવ થઈ ગઈ છે! [Receipt No: {rec_no}]")
             
@@ -635,10 +624,10 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
     df_parties = get_parties_data()
     df_couriers = get_couriers_data()
     
-    party_names = df_parties["Party Name"].tolist() if not df_parties.empty else []
-    party_dict = df_parties.set_index("Party Name").to_dict(orient="index") if not df_parties.empty else {}
-    courier_names_list = df_couriers["Courier Name"].tolist() if not df_couriers.empty else ["DTDC", "Delhivery", "Trackon"]
-    courier_url_dict = dict(zip(df_couriers["Courier Name"], df_couriers["Tracking URL"])) if not df_couriers.empty else {}
+    party_names = df_parties["Party Name"].tolist() if not df_parties.empty and "Party Name" in df_parties.columns else []
+    party_dict = df_parties.set_index("Party Name").to_dict(orient="index") if not df_parties.empty and "Party Name" in df_parties.columns else {}
+    courier_names_list = df_couriers["Courier Name"].tolist() if not df_couriers.empty and "Courier Name" in df_couriers.columns else ["DTDC", "Delhivery", "Trackon"]
+    courier_url_dict = dict(zip(df_couriers["Courier Name"], df_couriers["Tracking URL"])) if not df_couriers.empty and "Courier Name" in df_couriers.columns else {}
 
     if not party_names:
         st.warning("⚠️ પહેલા પાર્ટી ઉમેરો!")
@@ -684,10 +673,10 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                     "Payment Status", "Packing Info", "Packing Charge"
                 ]
                 row_vals = [
-                    date_entry, cons_no.strip(), selected_courier.strip(), mode.strip(), 
+                    date_entry, str(cons_no).strip(), selected_courier.strip(), mode.strip(), 
                     origin.strip(), dest.strip(), selected_party.strip(), sender_address.strip(), 
                     sender_city.strip(), rec_name.strip(), rec_address.strip(), rec_city.strip(), 
-                    weight.strip(), pcs.strip(), amount.strip(), 'Credit Account', "", 'Unpaid', "None", "0"
+                    str(weight).strip(), str(pcs).strip(), str(amount).strip(), 'Credit Account', "", 'Unpaid', "None", "0"
                 ]
                 
                 save_to_google_sheet("Courier_Entries", row_vals, headers)
@@ -697,7 +686,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
                 pdf_bytes = generate_hd_receipt_pdf(
                     cons_no, date_entry, selected_courier, mode, origin, dest, selected_party, 
                     sender_address, sender_city, rec_name, rec_address, rec_city, weight, pcs, 
-                    amount.strip(), 'Credit Account', t_url, cr_img_bytes
+                    str(amount).strip(), 'Credit Account', t_url, cr_img_bytes
                 )
                 st.download_button(label="🖨️ Download Credit Receipt PDF", data=pdf_bytes, file_name=f"Receipt_{cons_no}.pdf", mime="application/pdf", type="primary")
 
@@ -705,7 +694,7 @@ elif menu == "📋 Credit Account Booking (ક્રેડિટ એકાઉન
 elif menu == "📊 Party Monthly Billing (ડિજિટલ પીડીએફ બિલ)":
     st.subheader("📊 Party Digital PDF Invoice Generator")
     df_parties = get_parties_data()
-    p_list = df_parties["Party Name"].tolist() if not df_parties.empty else []
+    p_list = df_parties["Party Name"].tolist() if not df_parties.empty and "Party Name" in df_parties.columns else []
     
     if not p_list:
         st.warning("કોઈ પાર્ટી નથી.")
@@ -713,7 +702,7 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ પીડીએફ 
         sel_party = st.selectbox("Select Party for Bill:", p_list)
         if st.button("📄 Generate Digital PDF Invoice", type="primary"):
             df_courier = get_courier_data()
-            if not df_courier.empty:
+            if not df_courier.empty and "Sender Name" in df_courier.columns:
                 b_rows_df = df_courier[(df_courier["Sender Name"] == sel_party) & (df_courier["Booking Type"] == "Credit Account") & ((df_courier["Bill No"] == "") | (df_courier["Bill No"].isna()))]
                 if not b_rows_df.empty:
                     df_bills = get_bills_data()
@@ -738,7 +727,7 @@ elif menu == "📊 Party Monthly Billing (ડિજિટલ પીડીએફ 
 elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & રસીદ)":
     st.subheader("💳 Party Payment Receive")
     df_parties = get_parties_data()
-    p_list = df_parties["Party Name"].tolist() if not df_parties.empty else []
+    p_list = df_parties["Party Name"].tolist() if not df_parties.empty and "Party Name" in df_parties.columns else []
     
     if p_list:
         with st.form("pay_form"):
@@ -750,7 +739,7 @@ elif menu == "💳 Party Payment Receive (પેમેન્ટ જમા & ર�
             df_pays = get_party_payments_data()
             rec_id = len(df_pays) + 1
             headers_p = ["Party Name", "Bill No", "Date", "Amount", "Pay Mode", "Note"]
-            row_vals_p = [pay_party, "DIRECT", today.strftime("%d/%m/%Y"), pay_amt.strip(), pay_mode, ""]
+            row_vals_p = [pay_party, "DIRECT", today.strftime("%d/%m/%Y"), str(pay_amt).strip(), pay_mode, ""]
             save_to_google_sheet("Party_Payments", row_vals_p, headers_p)
             st.success("પેમેન્ટ જમા થઈ ગયું!")
             pdf_b = generate_payment_pdf_receipt(rec_id, pay_party, "DIRECT", today.strftime("%d/%m/%Y"), pay_amt, pay_mode, "")
@@ -762,9 +751,9 @@ elif menu == "📊 Summary & Reports (કેશ & ક્રેડિટ સમ�
     df_courier = get_courier_data()
     df_packs = get_packing_receipts_data()
 
-    c_sum = sum(float(x) for x in df_courier[df_courier["Booking Type"] == "Cash"]["Amount"]) if not df_courier.empty else 0.0
-    cr_sum = sum(float(x) for x in df_courier[df_courier["Booking Type"] == "Credit Account"]["Amount"]) if not df_courier.empty else 0.0
-    p_sum = sum(float(x) for x in df_packs["Total Charge"]) if not df_packs.empty else 0.0
+    c_sum = sum(float(x) for x in df_courier[df_courier["Booking Type"] == "Cash"]["Amount"]) if not df_courier.empty and "Booking Type" in df_courier.columns else 0.0
+    cr_sum = sum(float(x) for x in df_courier[df_courier["Booking Type"] == "Credit Account"]["Amount"]) if not df_courier.empty and "Booking Type" in df_courier.columns else 0.0
+    p_sum = sum(float(x) for x in df_packs["Total Charge"]) if not df_packs.empty and "Total Charge" in df_packs.columns else 0.0
 
     st.metric("📦 Total Cash Bookings", f"RS {c_sum:,.2f}/-")
     st.metric("📋 Total Credit Bookings", f"RS {cr_sum:,.2f}/-")
